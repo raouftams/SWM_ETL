@@ -31,6 +31,14 @@ def remove_duplicates(table, header):
     """
     return etl.distinct(table, header)
 
+def change_columns_type(df, columns_types):
+    """
+    Arguments
+    df: pandas dataframe
+    columns_types: dict of types 
+    """
+    return df.astype(columns_types)
+
 #This function transforms the data and returns a petl table
 def transform_rotations_data(data, sheets):
     """
@@ -49,8 +57,12 @@ def transform_rotations_data(data, sheets):
             #get the current sheet
             df = data[sheet_name]
             if not df.empty:
-                #remove whitespaces from column names
+                #remove whitespaces from column names 
                 df.columns = df.columns.str.strip()
+                #remove whitespaces from string values
+                for column in df.columns:
+                    df[column] = df[column].str.strip()
+
                 #lower case all the column names
                 df.columns = map(str.lower, df.columns)
                 #rename columns
@@ -60,6 +72,8 @@ def transform_rotations_data(data, sheets):
                 #drop rows with nan value on vehicle column, they represent total values of previous rows
                 df.dropna(subset = ["vehicle"], inplace=True)
 
+                #change the type of the columns
+                df = change_columns_type(df, rotations_table_types)
                 #convert dataframe to petl table
                 petl_table = df_to_petl(df)
                 #concatenate the petl table with the previous table

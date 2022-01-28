@@ -20,15 +20,12 @@ rotations_table_renaming = {
 
 #dict of column names and types
 rotations_table_types = {
-        "Véhicule": str, 
-        "N ticket": str, 
-        "N tick": str, 
-        "Date": date, 
-        "Net CET": int,
-        "Net Extra": int,
-        "Poids net": int,
-        "Poids extra": int,
-        "Tare": int,
-        "Brute": int,
-        "heure": time,
+        "vehicle" : str,
+        "town": str,
+        "gap" : float,
+        "date": str,
+        "time" : str,
+        "ticket" : str,
+        "net_cet": float,
+        "net_extra": float 
     }

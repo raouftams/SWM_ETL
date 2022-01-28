@@ -8,7 +8,7 @@ def read_xlsx_file(path: str, columns_types: dict):
     """
     Reads an excel file with pandas and returns dict of dataframes.
     """
-    df = pd.read_excel(path, sheet_name=None, header=0, dtype=columns_types)
+    df = pd.read_excel(path, sheet_name=None, header=0, dtype=str)
     return df
 
 #returns a list of sheets names of a dict of dataframes 
@@ -25,7 +25,7 @@ def read_csv_file(path: str, columns_types: dict):
     """
     Reads a csv file with pandas and returns dataframe.
     """
-    df = pd.read_csv(path, sheet_name=None, header=0, dtype=columns_types)
+    df = pd.read_csv(path, sheet_name=None, header=0, dtype=str)
     return df
 
 # this function is called when the extraction module is executed.
