@@ -4,7 +4,7 @@ import os
 
 #reads an excel file and returns a dict of dataframes
 #each dataframe is a sheet
-def read_xlsx_file(path: str, columns_types: dict):
+def read_xlsx_file(path: str):
     """
     Reads an excel file with pandas and returns dict of dataframes.
     """
@@ -21,7 +21,7 @@ def get_sheets(data):
 
 #reads csv file and returns a dict of dataframes
 #each dataframe is a sheet
-def read_csv_file(path: str, columns_types: dict):
+def read_csv_file(path: str):
     """
     Reads a csv file with pandas and returns dataframe.
     """
@@ -29,7 +29,7 @@ def read_csv_file(path: str, columns_types: dict):
     return df
 
 # this function is called when the extraction module is executed.
-def extract_data_from_file(path, columns_types):
+def extract_data_from_file(path):
     """
     Arguments
     path: path to the file
@@ -39,11 +39,8 @@ def extract_data_from_file(path, columns_types):
     """
     filename, file_extension = os.path.splitext(path)
     if file_extension == ".xlsx" or file_extension == ".xls":
-        data = read_xlsx_file(path, columns_types)
-        sheets = get_sheets(data)
+        data = read_xlsx_file(path)
     if file_extension == ".csv":
-        data = read_csv_file(path, columns_types)
-        sheets = get_sheets(data)
+        data = read_csv_file(path)
     
-    return data, sheets
-
+    return data, get_sheets(data)

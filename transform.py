@@ -1,5 +1,6 @@
 from extract import *
 import petl as etl
+import numpy as np
 from utilities import *
 
 
@@ -37,7 +38,20 @@ def change_columns_type(df, columns_types):
     df: pandas dataframe
     columns_types: dict of types 
     """
-    return df.astype(columns_types)
+    return df.astype(columns_types, errors = 'ignore')
+
+def add_missing_columns(df, header):
+    """
+    Arguments
+    df: pandas dataframe
+    header: list of column names
+    Purpose
+    This function adds missing columns to a pandas dataframe
+    """
+    for column in header:
+        if column not in df.columns:
+            df[column] = np.nan
+    return df
 
 #This function transforms the data and returns a petl table
 def transform_rotations_data(data, sheets):
@@ -61,17 +75,22 @@ def transform_rotations_data(data, sheets):
                 df.columns = df.columns.str.strip()
                 #remove whitespaces from string values
                 for column in df.columns:
-                    df[column] = df[column].str.strip()
+                    try:
+                        df[column] = df[column].str.strip()
+                    except:
+                        pass
 
                 #lower case all the column names
                 df.columns = map(str.lower, df.columns)
                 #rename columns
                 df.rename(columns=rotations_table_renaming, inplace=True)
+                #add missing columns
+                df = add_missing_columns(df, rotations_table_header)
                 #drop useless columns
                 df = df.drop(df.columns.difference(rotations_table_header), axis=1)
                 #drop rows with nan value on vehicle column, they represent total values of previous rows
                 df.dropna(subset = ["vehicle"], inplace=True)
-
+                
                 #change the type of the columns
                 df = change_columns_type(df, rotations_table_types)
                 #convert dataframe to petl table
@@ -82,15 +101,32 @@ def transform_rotations_data(data, sheets):
     #remove duplicates
     table = remove_duplicates(table, rotations_table_header)
     return table
-  
+
+#write petl table to csv file
+def write_petl_table_to_csv(table, path):
+    """
+    Arguments
+    table: petl table
+    path: path to the file
+    Purpose
+    This function writes a petl table to a csv file
+    """
+    if os.path.exists(path):
+        etl.appendcsv(table, path)
+    else:
+        etl.tocsv(table, path)  
 
 def main():
     # read the data
-    data, sheets = extract_data_from_file("D:\PFE M2\data\\2016\CORSO\\5-MAI 2016.xlsx", rotations_table_types)
-    # transform the data
-    table = transform_rotations_data(data, sheets)
-    # write the data
-    etl.tocsv(table, "2016.csv")
-
+    dir_path = "D:\PFE M2\data\\2019\HAMICI"
+    for filename in os.listdir(dir_path):
+        path = os.path.join(dir_path, filename)
+        print(path)
+        data, sheets = extract_data_from_file(path)
+        # transform the data
+        table = transform_rotations_data(data, sheets)
+        # write the data
+        write_petl_table_to_csv(table, "rotations2019.csv")
+        
 if __name__ == "__main__":
     main()
