@@ -25,7 +25,7 @@ def read_csv_file(path: str):
     """
     Reads a csv file with pandas and returns dataframe.
     """
-    df = pd.read_csv(path, sheet_name=None, header=0, dtype=str)
+    df = pd.read_csv(path, header=0)
     return df
 
 # this function is called when the extraction module is executed.

@@ -1,9 +1,11 @@
 from extract import *
+from utilities import *
 import petl as etl
 import numpy as np
-from utilities import *
+import distance
 
 
+"""---------------------- Transformation to standard structure ----------------------"""
 # pandas dataframe to petl
 def df_to_petl(df):
     return etl.fromdataframe(df) 
@@ -32,6 +34,7 @@ def remove_duplicates(table, header):
     """
     return etl.distinct(table, header)
 
+#change the type of the columns in a pandas dataframe
 def change_columns_type(df, columns_types):
     """
     Arguments
@@ -40,6 +43,7 @@ def change_columns_type(df, columns_types):
     """
     return df.astype(columns_types, errors = 'ignore')
 
+#add missing columns to a pandas dataframe
 def add_missing_columns(df, header):
     """
     Arguments
@@ -54,7 +58,7 @@ def add_missing_columns(df, header):
     return df
 
 #This function transforms the data and returns a petl table
-def transform_rotations_data(data, sheets):
+def structure_rotations_data(data, sheets):
     """
     Arguments
     data: dict of Pandas dataframes
@@ -89,7 +93,7 @@ def transform_rotations_data(data, sheets):
                 #drop useless columns
                 df = df.drop(df.columns.difference(rotations_table_header), axis=1)
                 #drop rows with nan value on vehicle column, they represent total values of previous rows
-                df.dropna(subset = ["vehicle"], inplace=True)
+                df.dropna(subset = ["vehicle", "ticket"], how="all", inplace=True)
                 
                 #change the type of the columns
                 df = change_columns_type(df, rotations_table_types)
@@ -116,17 +120,140 @@ def write_petl_table_to_csv(table, path):
     else:
         etl.tocsv(table, path)  
 
+def get_structured_data(dir_path, out_path, header):
+    data = []
+    for file in os.listdir(dir_path):
+        path = os.path.join(dir_path, file)
+        df, sheets = extract_data_from_file(path)
+        table = structure_rotations_data(df, sheets)
+        data = concat_table(data, table, header)
+    
+    write_petl_table_to_csv(data, out_path)
+
+def merge_rotation_data(dir_path, out_path):
+    data = []
+    for file in os.listdir(dir_path):
+        path = os.path.join(dir_path, file)
+        table = etl.fromcsv(path)
+        data = concat_table(data, table, rotations_table_header)
+    
+    write_petl_table_to_csv(data, out_path)
+
+
+"""---------------------- Cleaning data ----------------------"""
+#changing the towns names
+def change_towns_names(table, towns_names, town_abbreviations=None, stop_words=None):
+    """
+    Arguments
+    table: petl table
+    towns_names: list of appropriate towns names
+    town_abbreviations: dict of some abbreviations of towns names (abbreviation: town name), abbreviations are in lower case
+    stop_words: list of some common stop words
+    Purpose
+    This function changes the towns names
+    """
+    #dict of towns names (old name: new name)
+    towns_names_dict = {}
+    #extract only data with distinct values on town column
+    data = etl.distinct(table, "town")
+    #get town distinct values
+    old_names = etl.values(data, "town")
+
+    #iterate over the towns old names
+    for old_name in old_names:
+        lower_old_name = str.lower(old_name)
+        #removing stop words from the old name
+        if stop_words != None:
+            for stop_word in stop_words:
+                if str.lower(stop_word) in lower_old_name:
+                    lower_old_name = lower_old_name.replace(str.lower(stop_word), "").strip()
+
+        if lower_old_name != "" and lower_old_name != "nan":
+            #check if old name is an abbreviation
+            if town_abbreviations != None and lower_old_name in town_abbreviations.keys():
+                towns_names_dict[old_name] = town_abbreviations[lower_old_name]
+            
+            else:
+                for i in range(len(towns_names)):
+                    #check if a substring of the old name is in the towns names
+                    if compare_strings_with_substrings(lower_old_name, towns_names[i]) > 1:
+                        #if there are more than one match, the town is not changed
+                        towns_names_dict[old_name] = towns_names[i]
+                        
+                #initializing the nearest string in towns_names to the string at position -1
+                nearest = 0
+                min_distance = distance.levenshtein(lower_old_name, str.lower(towns_names[0]))
+                for i in range(len(towns_names)):
+                    #calculate the distance between the old name and the current town name
+                    current_distance = distance.levenshtein(lower_old_name, str.lower(towns_names[i]))
+                    if current_distance < min_distance:
+                        min_distance = current_distance
+                        nearest = i
+
+                #check the which one is the nearest by number of matches in their substrings before assigning the town name
+                if old_name in towns_names_dict.keys():
+                    if compare_strings_with_substrings(old_name, towns_names[nearest]) > compare_strings_with_substrings(old_name, towns_names_dict[old_name]):
+                        towns_names_dict[old_name] = towns_names[nearest]
+                else:
+                    if compare_strings_with_substrings(old_name, towns_names[nearest]) == 0:
+                        towns_names_dict[old_name] = None
+                    else:
+                        towns_names_dict[old_name] = towns_names[nearest]
+                
+        else: # lower_old_name = ""
+            towns_names_dict[old_name] = None
+
+    print(towns_names_dict)
+    #changing the town names in table
+    for old_name in towns_names_dict:
+        table = etl.convert(table, "town", old_name, towns_names_dict[old_name])
+    
+    return table
+
+
+#comparing strings with number of matches
+def compare_strings_with_substrings(string1, string2):
+    """
+    Arguments
+    string1: string
+    string2: string
+    Purpose
+    This function compares two strings and returns the number of matches in their substrings
+    """
+    first_substrings = str.lower(string1).split(" ")
+    second_substrings = str.lower(string2).split(" ")
+    #initialize the number of matches
+    matches = 0
+    for fst_sub in first_substrings:
+        for sec_sub in second_substrings:
+            if fst_sub == sec_sub:
+                matches += 1
+    return matches
+
+
 def main():
-    # read the data
-    dir_path = "D:\PFE M2\data\\2019\HAMICI"
-    for filename in os.listdir(dir_path):
-        path = os.path.join(dir_path, filename)
-        print(path)
-        data, sheets = extract_data_from_file(path)
-        # transform the data
-        table = transform_rotations_data(data, sheets)
-        # write the data
-        write_petl_table_to_csv(table, "rotations2019.csv")
-        
+    '''dir_paths = {
+        "D:\PFE M2\data\\2016\CORSO": "2016",
+        "D:\PFE M2\data\\2016\HAMICI": "2016",
+        "D:\PFE M2\data\\2017\CORSO": "2017",
+        "D:\PFE M2\data\\2017\HAMICI": "2017",
+        "D:\PFE M2\data\\2018\CORSO": "2018",
+        "D:\PFE M2\data\\2018\HAMICI": "2018",
+        "D:\PFE M2\data\\2019\CORSO": "2019",
+        "D:\PFE M2\data\\2019\HAMICI": "2019",
+    }
+
+    for path in dir_paths.keys():
+        out_path = os.path.join("out/", dir_paths[path] + ".csv")
+        get_structured_data(path, out_path, rotations_table_header)
+    
+    merge_rotation_data("out/", "out/rotations.csv")
+    '''
+
+    table = etl.fromcsv("out/2016.csv")
+    table = change_towns_names(table, towns_list, town_abbreviations, town_stop_words)
+    
+
+
 if __name__ == "__main__":
     main()
