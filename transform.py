@@ -3,6 +3,8 @@ from utilities import *
 import petl as etl
 import numpy as np
 import distance
+import sys
+import time
 
 
 """---------------------- Transformation to standard structure ----------------------"""
@@ -93,7 +95,7 @@ def structure_rotations_data(data, sheets):
                 #drop useless columns
                 df = df.drop(df.columns.difference(rotations_table_header), axis=1)
                 #drop rows with nan value on vehicle column, they represent total values of previous rows
-                df.dropna(subset = ["vehicle", "ticket"], how="all", inplace=True)
+                df.dropna(subset = ["vehicle_mat", "vehicle_id", "ticket", "date", "town", "town_code"], how="any", inplace=True)
                 
                 #change the type of the columns
                 df = change_columns_type(df, rotations_table_types)
@@ -116,33 +118,14 @@ def write_petl_table_to_csv(table, path):
     This function writes a petl table to a csv file
     """
     if os.path.exists(path):
-        etl.appendcsv(table, path)
+        etl.appendcsv(table, path, encoding='utf-8')
     else:
-        etl.tocsv(table, path)  
-
-def get_structured_data(dir_path, out_path, header):
-    data = []
-    for file in os.listdir(dir_path):
-        path = os.path.join(dir_path, file)
-        df, sheets = extract_data_from_file(path)
-        table = structure_rotations_data(df, sheets)
-        data = concat_table(data, table, header)
-    
-    write_petl_table_to_csv(data, out_path)
-
-def merge_rotation_data(dir_path, out_path):
-    data = []
-    for file in os.listdir(dir_path):
-        path = os.path.join(dir_path, file)
-        table = etl.fromcsv(path)
-        data = concat_table(data, table, rotations_table_header)
-    
-    write_petl_table_to_csv(data, out_path)
+        etl.tocsv(table, path, encoding='utf-8')
 
 
 """---------------------- Cleaning data ----------------------"""
 #changing the towns names
-def change_towns_names(table, towns_names, town_abbreviations=None, stop_words=None):
+def transform_towns_names(table, towns_names, town_abbreviations=None, stop_words=None):
     """
     Arguments
     table: petl table
@@ -196,20 +179,21 @@ def change_towns_names(table, towns_names, town_abbreviations=None, stop_words=N
                         towns_names_dict[old_name] = towns_names[nearest]
                 else:
                     if compare_strings_with_substrings(old_name, towns_names[nearest]) == 0:
-                        towns_names_dict[old_name] = None
+                        towns_names_dict[old_name] = 'nan'
                     else:
                         towns_names_dict[old_name] = towns_names[nearest]
                 
         else: # lower_old_name = ""
-            towns_names_dict[old_name] = None
+            towns_names_dict[old_name] = 'nan'
 
-    print(towns_names_dict)
     #changing the town names in table
-    for old_name in towns_names_dict:
-        table = etl.convert(table, "town", old_name, towns_names_dict[old_name])
+    for old_name in towns_names_dict.keys():
+        if old_name != 'nan':
+            table = etl.convert(table, "town", {old_name: towns_names_dict[old_name]})
     
+    #removing all lines with nan value on town column
+    table = etl.selectisnot(table, "town", "nan")
     return table
-
 
 #comparing strings with number of matches
 def compare_strings_with_substrings(string1, string2):
@@ -230,9 +214,106 @@ def compare_strings_with_substrings(string1, string2):
                 matches += 1
     return matches
 
+#hijri to gregorian date and vice versa
+def transform_dates(table):
+    """
+    parms:
+        table: a petl table
+    purpose:
+        This function transforms the dates (hijri to gregorian and gregorian to hijri)
+    """    
+
+    #transform the hijri to gregorian dates
+    table = etl.convert(table, "date", get_gregorian_date, pass_row=True)
+    #transform the gregorian to hijri dates
+    table = etl.convert(table, "date_hijri", get_hijri_date, pass_row=True)
+    #remove the rows with nan values on date column
+    table = etl.selectisnot(table, "date", "nan")
+    #remove the rows with nan values on date_hijri column
+    table = etl.selectisnot(table, "date_hijri", "nan")
+
+    #transform all dates to same format (dd-mm-yyyy)
+    table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
+    table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
+
+    return table
+
+#petl function to get gregorian date from hijri date
+def get_gregorian_date(value, row):
+    """
+    params: value: the value of the gregorian date column in current row
+            row: the row of the table
+    purpose:
+        This function returns the gregorian date from the hijri date
+    """
+    #check if the value is in any way a correct format of date
+    if is_date(value):
+        return value
+    else: #the value is not a correct date
+        #get the hijri date from the current row
+        current_hijri_date = row["date_hijri"]
+        #check if the hijri date is in any way a correct format of date
+        if is_date(current_hijri_date):
+            #get the gregorian date from the hijri date 
+            return hijri_to_gregorian_date(current_hijri_date)
+    #if the value is not a correct date and the hijri date is not a correct date
+    return "nan"
+
+#petl function to get hijri date from gregorian date
+def get_hijri_date(value, row):
+    """
+    params: value: the value of the hijri date column in current row
+            row: the row of the table
+    purpose:
+        This function returns the hijri date from the gregorian date
+    """
+    #check if the value is in any way a correct format of date
+    if is_date(value):
+        return value
+    else: #the value is not a correct date
+        #get the gregorian date from the current row
+        current_gregorian_date = row["date"]
+        #check if the gregorian date is in any way a correct format of date
+        if is_date(current_gregorian_date):
+            #get the hijri date from the gregorian date 
+            return gregorian_to_hijri_date(current_gregorian_date)
+    #if the value is not a correct date and the hijri date is not a correct date
+    return "nan"
+
+#clean net weight
+def transform_weights(table):
+    #replace net_cet nan values with net_extra values
+    table = etl.convert(table, {
+        "net_cet": lambda net_cet, row: row["net_extra"]
+        }, where=lambda row: row["net_cet"] == 'nan', pass_row=True)
+
+    #remove rows with nan value on net_cet
+    table = etl.selectisnot(table, "net_cet", "nan")
+
+    return table
+
+#general function for transforming rotation data
+def transform_rotation_data(data, sheets):
+    """
+    params: 
+            data: a dict of pandas dataframes
+            sheets: list of keys
+    """
+    #transform to a standard structure
+    table = structure_rotations_data(data, sheets)
+    #Transforming towns names in the table
+    #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
+    table = transform_towns_names(table, towns_list, towns_abbreviations, town_stop_words)
+    #transfroming dates
+    table = transform_dates(table)
+    #transforming weights
+    table = transform_weights(table)
+
+    return table
 
 def main():
-    '''dir_paths = {
+    '''
+    dir_paths = {
         "D:\PFE M2\data\\2016\CORSO": "2016",
         "D:\PFE M2\data\\2016\HAMICI": "2016",
         "D:\PFE M2\data\\2017\CORSO": "2017",
@@ -242,16 +323,13 @@ def main():
         "D:\PFE M2\data\\2019\CORSO": "2019",
         "D:\PFE M2\data\\2019\HAMICI": "2019",
     }
-
-    for path in dir_paths.keys():
-        out_path = os.path.join("out/", dir_paths[path] + ".csv")
-        get_structured_data(path, out_path, rotations_table_header)
-    
-    merge_rotation_data("out/", "out/rotations.csv")
     '''
-
-    table = etl.fromcsv("out/2016.csv")
-    table = change_towns_names(table, towns_list, town_abbreviations, town_stop_words)
+    sys.setrecursionlimit(10000)
+    path = "D:\PFE M2\data\\new_data\BDD Rotations 2018-2019.xlsx"
+    start_time = time.time()
+    df, sheets = extract_data_from_file(path)
+    table = transform_rotation_data(df, sheets)
+    print(table)
     
 
 
