@@ -1,3 +1,5 @@
+from psycopg2.extensions import AsIs
+
 class Table:
 
     def __init__(self, table_name) -> None:
@@ -11,8 +13,10 @@ class Table:
         """
         #create a cursor
         cursor = db_connection.cursor()
-        #execute the query
-        cursor.execute(f"INSERT INTO {self.table_name} (%s) VALUES (%s)" % (', '.join(data.keys()), ', '.join('%s' for _ in data.values())), tuple(data.values()))
+        #create statement
+        statement = "INSERT INTO {self.table_name} (%s) VALUES (%s)"
+        #execute statement
+        cursor.execute(statement, (AsIs(','.join(data.keys())), tuple(data.values())))
         #commit changes
         db_connection.commit()
         #close cursor

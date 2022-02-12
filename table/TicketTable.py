@@ -1,21 +1,21 @@
 from Table import Table
 
-class RotationTable(Table):
+class TicketTable(Table):
 
     def __init__(self) -> None:
-        super().__init__("rotation")
+        super().__init__("ticket")
     
 
-    def exists(self, id, db_connection):
+    def exists(self, code, db_connection):
         """
         Arguments: 
-            id: rotation id (primary key)
+            id: ticket code (primary key)
             db_connection: psycopg2 db connection instance
         """
         #create a cursor
         cursor = db_connection.cursor()
         #execute query
-        cursor.execute("SELECT * from {self.table_name} where id = {id}")
+        cursor.execute("SELECT * from {self.table_name} where code = '{code}'")
         #get selected records
         data = cursor.fetchall()
         #close cursor
