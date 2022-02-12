@@ -2,7 +2,7 @@ from configparser import ConfigParser
 import psycopg2
 
 #database configuration
-def config(filename='database.ini', section='postgresql'):
+def config(filename='config/database.ini', section='postgresql'):
     """
     credits to: https://www.postgresqltutorial.com/postgresql-python/connect/
     """
@@ -38,3 +38,8 @@ def connect():
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
+
+
+con = connect()
+cursor = con.cursor()
+print("ok")

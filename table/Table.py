@@ -14,10 +14,30 @@ class Table:
         #create a cursor
         cursor = db_connection.cursor()
         #create statement
-        statement = "INSERT INTO {self.table_name} (%s) VALUES (%s)"
+        statement = "INSERT INTO {}(%s) VALUES %s".format(self.table_name)
         #execute statement
         cursor.execute(statement, (AsIs(','.join(data.keys())), tuple(data.values())))
         #commit changes
         db_connection.commit()
         #close cursor
         cursor.close()
+
+    def exists(self, code, db_connection):
+        """
+        Arguments: 
+            code: vehicle code (primary key)
+            db_connection: psycopg2 db connection instance
+        """
+        #create a cursor
+        cursor = db_connection.cursor()
+        #execute query
+        cursor.execute("SELECT * from {} where code = '{}'".format(self.table_name, code))
+        #get selected records
+        data = cursor.fetchall()
+        #close cursor
+        cursor.close()
+
+        if data == []:
+            return False
+        
+        return True

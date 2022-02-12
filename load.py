@@ -1,21 +1,13 @@
 from config.database import connect
+from table.RotationTable import RotationTable
+from table.TicketTable import TicketTable
+from table.VehicleTable import VehicleTable
+from table.TownTable import TownTable
+from table.UnityTable import UnityTable
 
 #insert a rotation to the database (rotation table)
 def insert_rotation(data, db_con):
-    """
-    arguments: 
-        data: dict of data
-        db_conn: psycopg2 db connection instance
-    """
-    #create a cursor
-    cursor = db_con.cursor()
-    #execute the query
-    cursor.execute()
-    #commit changes
-    db_con.commit()
-    #close cursor
-    cursor.close()
-
+   pass
 
 #insert a vehicle to the database (vehicle table)
 def insert_vehicle(row):
@@ -35,4 +27,15 @@ def load_rotations(rotation_data):
     param: rotation_data: petl table
     purpose: load rotations data to the database
     """
+    #split data
     pass
+
+town = UnityTable()
+data = {
+    "code": "U0123",
+    "name": "Dar El beida"
+}
+
+db_con = connect()
+print(town.exists("U0123", db_con))
+print("fin")

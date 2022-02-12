@@ -1,4 +1,4 @@
-from Table import Table
+from table.table import Table 
 
 class RotationTable(Table):
 
@@ -15,7 +15,7 @@ class RotationTable(Table):
         #create a cursor
         cursor = db_connection.cursor()
         #execute query
-        cursor.execute("SELECT * from {self.table_name} where id = {id}")
+        cursor.execute("SELECT * from {} where id = {}".format(self.table_name, id))
         #get selected records
         data = cursor.fetchall()
         #close cursor
