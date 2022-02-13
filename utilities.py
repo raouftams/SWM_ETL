@@ -158,6 +158,37 @@ town_stop_words = [
     "OPERATION AUTOROUTE"
 ]
 
+#vehicles data columns names
+vehicles_table_header = ["code", "ancien_matricule", "nouveau_matricule", "num_chassie", "tare", "capacite", "marque", "genre", "volume", "puissance", "mise_en_marche", "code_commune"]
+
+#dict of column names and renaming rules
+vehicles_table_renaming = {
+    "identifiant": "code",
+    "ancien matricule": "ancien_matricule",
+    "nouveau matricule": "nouveau_matricule",
+    "matricule": "nouveau_matricule",
+    "n° chassie": "num_chassie",
+    "codec": "code_commune",
+    "code c": "code_commune",
+    "année mise en marche": "mise_en_marche",
+    "volume (m3)": "volume",
+}
+
+#dict of column names and types
+vehicles_table_types = {
+    "code": str,
+    "ancien_matricule": str,
+    "nouveau_matricule": str,
+    "num_chassie": str,
+    "tare": float,
+    "capacite": float,
+    "marque": str,
+    "genre": str,
+    "volume": float,
+    "puissance": float,
+    "mise_en_marche": str,
+    "code_commune": str
+}
 
 #get hijri date from a date
 def gregorian_to_hijri_date(date: str):
