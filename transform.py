@@ -108,6 +108,48 @@ def structure_rotations_data(data, sheets):
     table = remove_duplicates(table, rotations_table_header)
     return table
 
+
+#structure vehicles data
+def structure_vehicles_data(data, sheets):
+    """
+    Arguments: 
+        data: dict of pandas dataframe
+        sheets: list of keys
+    purpose:
+        transform vehicles data to a standard structure 
+    """
+    #initialize petl table
+    table = []
+    #iterate through dataframes
+    for key in sheets:
+        if str.lower(key) == "parc":
+            df = data[key]
+            if not df.empty:
+                #remove whitespaces from column names 
+                df.columns = df.columns.str.strip()
+                #remove whitespaces from string values
+                for column in df.columns:
+                    try:
+                        df[column] = df[column].str.strip()
+                    except:
+                        pass
+                #lower case all the column names
+                df.columns = map(str.lower, df.columns)
+                #rename columns
+                df.rename(columns=vehicles_table_renaming, inplace=True)
+                #add missing columns
+                df = add_missing_columns(df, vehicles_table_header)
+                #drop useless columns
+                df = df.drop(df.columns.difference(vehicles_table_header), axis=1)
+                #drop rows with nan values on town_code, matirucule, code
+                df.dropna(subset = ["code_commune", "nouveau_matricule", "code"], how="any", inplace=True)
+                #convert dataframe to petl table
+                petl_table = df_to_petl(df)
+                #concatenate the petl table with the previous table
+                table = concat_table(table, petl_table, vehicles_table_header)
+    
+    return table
+
 #write petl table to csv file
 def write_petl_table_to_csv(table, path):
     """
@@ -311,6 +353,8 @@ def transform_rotation_data(data, sheets):
 
     return table
 
+
+
 def main():
     '''
     dir_paths = {
@@ -325,10 +369,9 @@ def main():
     }
     '''
     sys.setrecursionlimit(10000)
-    path = "D:\PFE M2\data\\new_data\BDD Rotations 2018-2019.xlsx"
-    start_time = time.time()
+    path = "D:\PFE M2\data\\new_data\Parc extranet.xlsx"
     df, sheets = extract_data_from_file(path)
-    table = transform_rotation_data(df, sheets)
+    table = structure_vehicles_data(df, sheets)
     print(table)
     
 
