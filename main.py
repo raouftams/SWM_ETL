@@ -2,11 +2,12 @@ from load import *
 from transform import *
 from extract import *
 
+import petl as etl
+
 def main():
-    path = "D:\PFE M2\data\\new_data\Parc extranet.xlsx"
-    df, sheets = extract_data_from_file(path)
-    table = structure_vehicles_data(df, sheets)
-    load_vehicles(table)
+    path = "out/test.csv"
+    table = etl.fromcsv(path, encoding="utf-8")
+    load_rotations(table)
     print("end")
 
 
