@@ -38,8 +38,3 @@ def connect():
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
-
-
-con = connect()
-cursor = con.cursor()
-print("ok")
