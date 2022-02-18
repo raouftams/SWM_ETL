@@ -3,8 +3,7 @@ from utilities import *
 import petl as etl
 import numpy as np
 import distance
-import sys
-import time
+import math
 
 
 """---------------------- Transformation to standard structure ----------------------"""
@@ -59,51 +58,70 @@ def add_missing_columns(df, header):
             df[column] = np.nan
     return df
 
+
+#this function transforms df of rotation data to standard structure and return petl table
+def structure_rotation_df(df):
+    petl_table = []
+    if not df.empty:
+        #remove whitespaces from column names 
+        df.columns = df.columns.str.strip()
+        #remove whitespaces from string values
+        for column in df.columns:
+            try:
+                df[column] = df[column].str.strip()
+            except:
+                pass
+        #lower case all the column names
+        df.columns = map(str.lower, df.columns)
+        #rename columns
+        df.rename(columns=rotations_table_renaming, inplace=True)
+        #add missing columns
+        df = add_missing_columns(df, rotations_table_header)
+        #drop useless columns
+        df = df.drop(df.columns.difference(rotations_table_header), axis=1)
+        #drop rows with nan value on vehicle column, they represent total values of previous rows
+        df.dropna(subset = ["ticket"], inplace=True)
+        df.dropna(subset = ["vehicle_mat", "vehicle_id"], how="all", inplace=True)
+        df.dropna(subset = ["town_code", "town"], how="all", inplace=True)
+        df.dropna(subset = ["date", "date_hijri"], how="all", inplace=True)
+        print(df.shape)
+        #change the type of the columns
+        df = change_columns_type(df, rotations_table_types)
+        #convert dataframe to petl table
+        petl_table = df_to_petl(df)
+        print(petl_table)
+
+    return petl_table
+
+
 #This function transforms the data and returns a petl table
-def structure_rotations_data(data, sheets):
+def structure_rotations_data(data, sheets=None):
     """
     Arguments
     data: dict of Pandas dataframes
     sheets: list of sheets names
+
+    if sheets != None: data is a dict of pandas dataframes
+    else: data is a pandas dataframe
+
     Purpose
     This function transforms the data and returns a petl table
     """
-    #initialize a petl table
-    table = []
-    # transform the data
-    for sheet_name in sheets:
-        #these two sheets are not used
-        if sheet_name != "TOTAL" and sheet_name != "CET":
-            #get the current sheet
-            df = data[sheet_name]
-            if not df.empty:
-                #remove whitespaces from column names 
-                df.columns = df.columns.str.strip()
-                #remove whitespaces from string values
-                for column in df.columns:
-                    try:
-                        df[column] = df[column].str.strip()
-                    except:
-                        pass
-
-                #lower case all the column names
-                df.columns = map(str.lower, df.columns)
-                #rename columns
-                df.rename(columns=rotations_table_renaming, inplace=True)
-                #add missing columns
-                df = add_missing_columns(df, rotations_table_header)
-                #drop useless columns
-                df = df.drop(df.columns.difference(rotations_table_header), axis=1)
-                #drop rows with nan value on vehicle column, they represent total values of previous rows
-                df.dropna(subset = ["vehicle_mat", "vehicle_id", "ticket", "date", "town", "town_code"], how="any", inplace=True)
-                
-                #change the type of the columns
-                df = change_columns_type(df, rotations_table_types)
-                #convert dataframe to petl table
-                petl_table = df_to_petl(df)
+    if sheets != None:
+        #initialize a petl table
+        table = []
+        # transform the data
+        for sheet_name in sheets:
+            #these two sheets are not used
+            if sheet_name != "TOTAL" and sheet_name != "CET":
+                #get the current sheet
+                df = data[sheet_name]
+                petl_table = structure_rotation_df(df)
                 #concatenate the petl table with the previous table
                 table = concat_table(table, petl_table, rotations_table_header)
-                
+    else:
+        table = structure_rotation_df(data)
+
     #remove duplicates
     table = remove_duplicates(table, rotations_table_header)
     return table
@@ -277,7 +295,7 @@ def transform_dates(table):
     #transform all dates to same format (dd-mm-yyyy)
     table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
     table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
-
+    print("ok dagi")
     return table
 
 #petl function to get gregorian date from hijri date
@@ -322,16 +340,53 @@ def get_hijri_date(value, row):
     #if the value is not a correct date and the hijri date is not a correct date
     return "nan"
 
+
+#petl function for replacing net_cet value with net_extra if net_cet is nan
+def net_extra_to_net_cet(val, row):
+    """
+    params: val: the value of the net_cet column in current row
+            row: the row of the table
+    purpose:
+        This function replaces the net_cet value with net_extra if net_cet is nan
+    """
+
+    if math.isnan(val):
+        return row["net_extra"]
+    else:
+        return val
+
+#petl function for calculating the gap value
+def get_tare_weight(val, row):
+    """
+    params: val: the value of the net_cet column in current row
+            row: the row of the table
+    purpose:
+        This function calculates the tare values if it's nan
+    """
+    #check if the current value is nan
+    if math.isnan(val):
+        #check if brute value is nan
+        #the net_cet value can't be nan because the nan values are already deleted
+        if not math.isnan(row['brute']):
+            return row['brute'] - row['net_cet']
+    
+    return val
+
 #clean net weight
 def transform_weights(table):
     #replace net_cet nan values with net_extra values
-    table = etl.convert(table, {
-        "net_cet": lambda net_cet, row: row["net_extra"]
-        }, where=lambda row: row["net_cet"] == 'nan', pass_row=True)
-
+    table = etl.convert(
+        table,
+        "net_cet", 
+        net_extra_to_net_cet,
+        pass_row=True
+    )
     #remove rows with nan value on net_cet
-    table = etl.selectisnot(table, "net_cet", "nan")
+    table = etl.selectisnot(table, "net_cet", None)
 
+    #calculate the tare 
+    #table = etl.convert(table, "tare",get_tare_weight,pass_row = True)
+    
     return table
 
 #general function for transforming rotation data
@@ -342,12 +397,18 @@ def transform_rotation_data(data, sheets):
             sheets: list of keys
     """
     #transform to a standard structure
+    print("data structuring")
     table = structure_rotations_data(data, sheets)
+    print(etl.nrows(table))
     #Transforming towns names in the table
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
+    print("towns names transformation")
     table = transform_towns_names(table, towns_list, towns_abbreviations, town_stop_words)
+    print(etl.nrows(table))
     #transfroming dates
+    print("dates transformation")
     table = transform_dates(table)
+    print("cbon")
     #transforming weights
     table = transform_weights(table)
 
@@ -367,13 +428,13 @@ def main():
         "D:\PFE M2\data\\2019\CORSO": "2019",
         "D:\PFE M2\data\\2019\HAMICI": "2019",
     }
-    '''
+    
     sys.setrecursionlimit(10000)
     path = "D:\PFE M2\data\\new_data\Parc extranet.xlsx"
     df, sheets = extract_data_from_file(path)
     table = structure_vehicles_data(df, sheets)
     print(table)
-    
+    '''
 
 
 if __name__ == "__main__":
