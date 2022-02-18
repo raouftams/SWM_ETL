@@ -40,7 +40,9 @@ def extract_data_from_file(path):
     filename, file_extension = os.path.splitext(path)
     if file_extension == ".xlsx" or file_extension == ".xls":
         data = read_xlsx_file(path)
+        sheets = get_sheets(data)
     if file_extension == ".csv":
         data = read_csv_file(path)
+        sheets = None
     
-    return data, get_sheets(data)
+    return data, sheets
