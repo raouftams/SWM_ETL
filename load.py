@@ -6,7 +6,8 @@ from table.TownTable import TownTable
 from table.UnityTable import UnityTable
 import petl as etl
 import numpy as np
-from utilities import rotations_table_types, vehicles_table_types
+import math
+from utilities import concat_table, rotations_table_types, vehicles_table_types
 
 
 #insert rotations to database
@@ -48,7 +49,7 @@ def insert_ticket(data, db_connection):
 
     #check net wieghts
     net = data['net_cet']
-    if net == 'nan':
+    if math.isnan(net):
         net = data['net_extra']
 
     #transform dict 
@@ -62,6 +63,25 @@ def insert_ticket(data, db_connection):
     #insert data
     ticket.insert(ticket_dict, db_connection)
 
+#insert ticket data to database
+def insert_ticket_table(table, db_connection):
+    """
+    Args:
+        table: petl table of ticket data
+        db_connection: psycopg2 db connection instance
+    Purpose:
+        insert ticket data to database
+    """
+
+    ticket_table_columns = ["code", "brute", "net", "date", "heure", "cet"]
+    ticket_table_header_rename = {"ticket": "code", "net_cet":"net","time": "heure"}
+    
+    table = etl.rename(table, ticket_table_header_rename)
+    dup = etl.duplicates(table, 'code')
+    print(dup)
+    table = etl.distinct(table, ['code','cet'])
+    etl.todb(table, db_connection, "ticket")
+
 #insert vehicles to the database (vehicle table)
 def check_vehicle(table, db_connection):
     """
@@ -74,7 +94,7 @@ def check_vehicle(table, db_connection):
     vehicle = VehicleTable()
 
     #extract vehicles data from table and transform into numpy array
-    vehicles_array = etl.values(table, ["vehicle_id", "vehicle_mat"])
+    vehicles_array = etl.values(etl.distinct(table, ["vehicle_id", "vehicle_mat"]), ["vehicle_id", "vehicle_mat"])
     #remove rows with vehicle_id = nan or vehicle_mat = nan or do not exist in the database
     for row in vehicles_array:
         #if vehicle data is nan
@@ -89,7 +109,7 @@ def check_vehicle(table, db_connection):
                 table = etl.selectisnot(table, "vehicle_id", row[0])
             else:
                 #check if mat exists
-                if row[1] != "nan" and not vehicle.exists_mat(row[1], db_connection):
+                if row[1] != "nan" and row[0] == "nan" and not vehicle.exists_mat(row[1], db_connection):
                     #remove row
                     table = etl.selectisnot(table, "vehicle_mat", row[1])
     
@@ -104,11 +124,15 @@ def check_ticket(table, db_connection):
         check if ticket exists in database else add to db
     """
 
+    #ticket table
+    ticket_table = []
+
     #create ticket table instance
     ticket = TicketTable()
 
-    #extract tickets data from table and transform into numpy array
-    tickets_array = etl.values(table, "ticket")
+    #extract tickets data from table 
+    tickets_array = etl.cut(table, "ticket", "brute", "net_cet", "date", "time", "cet")
+    """
     #remove rows with ticket_code = nan or does not exist in the database
     for code_t in tickets_array:
         #check if the ticket exists in database
@@ -120,10 +144,15 @@ def check_ticket(table, db_connection):
             #select ticket data
             ticket_data = etl.select(table, lambda row: row["ticket"] == code_t)
             #transform ticket data into dict
-            ticket_data = etl.dicts(ticket_data)
+            #ticket_data = etl.dicts(ticket_data)
+            #concat ticket data
+            ticket_table = concat_table(ticket_table, ticket_data, ["ticket", "brute", "net_cet", "date", "time"])
+            print(ticket_table)
             #insert ticket data to database
-            insert_ticket(ticket_data[0], db_connection)
-
+            #insert_ticket(ticket_data[0], db_connection)
+    """
+    
+    insert_ticket_table(tickets_array, db_connection)
     return table
     
 
@@ -141,7 +170,7 @@ def check_town(table, db_connection):
     town = TownTable()
 
     #extract towns data from table and transform into numpy array
-    towns_array = etl.values(table, ["town_code", "town"])
+    towns_array = etl.values(etl.distinct(table, ["town_code", "town"]), ["town_code", "town"])
     #remove rows with code_commune = nan or does not exist in the database
     for row in towns_array:
         code_c = row[0]
@@ -155,11 +184,13 @@ def check_town(table, db_connection):
             #check if code exists
             if code_c != "nan" and not town.exists(code_c, db_connection):
                 #remove rows
+                print("removed 1")
                 table = etl.selectisnot(table, "town_code", code_c)
             else:
                 #check if name exists
-                if name_c != "nan" and not town.exists_name(name_c, db_connection):
+                if name_c != "nan" and code_c == "nan" and not town.exists_name(name_c, db_connection):
                     #remove rows
+                    print("removed 2")
                     table = etl.selectisnot(table, "town", name_c)
     return table
 
@@ -220,22 +251,28 @@ def load_rotations(rotation_table):
     rotation_table = etl.convert(rotation_table, rotations_table_types)
 
     #check if town exists in database
+    print("Checking town data...")
     rotation_table = check_town(rotation_table, db_connection)
     #chekc if ticket exists in database
+    print("Checking ticket data...")
     rotation_table = check_ticket(rotation_table, db_connection)
     #check if vehicle exists in database
+    print("Checking vehicle data...")
     rotation_table = check_vehicle(rotation_table, db_connection)
 
     """ data enrichment """
     #vehicle data enrichment
+    print("Enriching vehicle data...")
     rotation_table = enrich_vehicle_data(rotation_table, db_connection)
     #town data enrichment
+    print("Enriching town data...")
     rotation_table = enrich_town_data(rotation_table, db_connection)
 
     #extract important columns from rotation table
     rotations_data = etl.dicts(rotation_table)
 
     #load rotations data to the database
+    print("Loading rotations data to the database...")
     insert_rotations(rotations_data, db_connection)
 
 
