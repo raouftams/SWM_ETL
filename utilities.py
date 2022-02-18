@@ -1,5 +1,6 @@
 import requests
 from dateutil.parser import parse
+import petl as etl
 
 #Rotation data column names
 rotations_table_header = ["vehicle_mat", "vehicle_id", "town", "town_code", "unit", "unit_code", "date", "date_hijri", "time", "net_extra", "gap", "net_cet", "tare", "brute", "ticket", "cet"]
@@ -116,7 +117,7 @@ towns_list = [
      "Aïn Taya", 
      "Bordj El Bahri", 
      "El Marsa", 
-     "H'Raoua", 
+     "Heuraoua", 
      "Rouïba", 
      "Reghaïa", 
      "Aïn Benian", 
@@ -253,3 +254,16 @@ def is_date(string, fuzzy=False):
     except ValueError:
         return False
 
+#Concatenate two petl tables with a fixed set of fields 
+def concat_table(table_a, table_b, header):
+    """
+    Arguments
+    table_a: a petl table
+    table_b: a petl table
+    header: a list of column names
+    Purpose
+    This function concatenates two petl tables and returns a new petl table
+    """
+    if table_a != []:
+        return etl.cat(table_a, table_b, header=header)
+    return table_b
