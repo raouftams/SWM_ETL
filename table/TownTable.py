@@ -6,6 +6,26 @@ class TownTable(Table):
         super().__init__("commune")
     
 
+    def get_all(self, db_connection):
+        """
+        Args:
+            db_connection: psycopg2 db connection instance
+        Get all towns
+        """
+        #create cursor
+        cursor = db_connection.cursor()
+        #execute query
+        cursor.execute("SELECT code, name FROM commune")
+        #get result
+        result = cursor.fetchall()
+        #close cursor
+        cursor.close()
+        #check if result is empty
+        if result != []:
+            return result
+        
+        return None
+
     #check if town name exists
     def exists_name(self, name, db_connection):
         """
