@@ -1,6 +1,9 @@
 import requests
 from dateutil.parser import parse
 import petl as etl
+import time
+from config.database import connect
+from table.TownTable import TownTable
 
 #Rotation data column names
 rotations_table_header = ["vehicle_mat", "vehicle_id", "town", "town_code", "unit", "unit_code", "date", "date_hijri", "time", "net_extra", "gap", "net_cet", "tare", "brute", "ticket", "cet"]
@@ -191,6 +194,7 @@ vehicles_table_types = {
     "code_commune": str
 }
 
+
 #get hijri date from a date
 def gregorian_to_hijri_date(date: str):
     """
@@ -254,6 +258,14 @@ def is_date(string, fuzzy=False):
     except ValueError:
         return False
 
+#check if a string is time format
+def is_time(input):
+    try:
+        time.strptime(input, '%H:%M:%S')
+        return True
+    except ValueError:
+        return False
+
 #Concatenate two petl tables with a fixed set of fields 
 def concat_table(table_a, table_b, header):
     """
@@ -267,3 +279,17 @@ def concat_table(table_a, table_b, header):
     if table_a != []:
         return etl.cat(table_a, table_b, header=header)
     return table_b
+
+#get towns registred in database
+def get_registred_towns_data(db_connection):
+    """
+    return: an array with all towns registred in database
+    """
+    instance = TownTable()
+    data = instance.get_all(db_connection)
+    town_names = town_codes = []
+    for r in data:
+        town_names.append(r[1]) 
+        town_codes.append(r[0])
+    
+    return town_codes, town_names
