@@ -13,7 +13,7 @@ def main():
     table = transform_rotation_data(data, sheets)
     
     print(table)
-    load_rotations(table)
+    write_petl_table_to_csv(table, "out/new_data.csv")
     #load_rotations(table)
     print("end")
 
