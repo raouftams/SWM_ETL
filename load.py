@@ -77,9 +77,7 @@ def insert_ticket_table(table, db_connection):
     ticket_table_header_rename = {"ticket": "code", "net_cet":"net","time": "heure"}
     
     table = etl.rename(table, ticket_table_header_rename)
-    dup = etl.duplicates(table, 'code')
-    print(dup)
-    table = etl.distinct(table, ['code','cet'])
+    print("ok dagi")
     etl.todb(table, db_connection, "ticket")
 
 #insert vehicles to the database (vehicle table)
@@ -169,8 +167,14 @@ def check_town(table, db_connection):
     #create town table instance
     town = TownTable()
 
+    #extract towns data 
+    towns_table = etl.cut(table, "town_code", "town")
+
     #extract towns data from table and transform into numpy array
-    towns_array = etl.values(etl.distinct(table, ["town_code", "town"]), ["town_code", "town"])
+    towns_array = etl.toarray(towns_table)
+    print("ok")
+    towns_array = np.unique(towns_array, axis=0)
+    print("ok2")
     #remove rows with code_commune = nan or does not exist in the database
     for row in towns_array:
         code_c = row[0]
@@ -251,22 +255,22 @@ def load_rotations(rotation_table):
     rotation_table = etl.convert(rotation_table, rotations_table_types)
 
     #check if town exists in database
-    print("Checking town data...")
-    rotation_table = check_town(rotation_table, db_connection)
+    #print("Checking town data...")
+    #rotation_table = check_town(rotation_table, db_connection)
     #chekc if ticket exists in database
     print("Checking ticket data...")
     rotation_table = check_ticket(rotation_table, db_connection)
     #check if vehicle exists in database
-    print("Checking vehicle data...")
-    rotation_table = check_vehicle(rotation_table, db_connection)
+    #print("Checking vehicle data...")
+    #rotation_table = check_vehicle(rotation_table, db_connection)
 
     """ data enrichment """
     #vehicle data enrichment
     print("Enriching vehicle data...")
-    rotation_table = enrich_vehicle_data(rotation_table, db_connection)
+    #rotation_table = enrich_vehicle_data(rotation_table, db_connection)
     #town data enrichment
     print("Enriching town data...")
-    rotation_table = enrich_town_data(rotation_table, db_connection)
+    #rotation_table = enrich_town_data(rotation_table, db_connection)
 
     #extract important columns from rotation table
     rotations_data = etl.dicts(rotation_table)
