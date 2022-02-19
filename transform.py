@@ -1,10 +1,14 @@
 from extract import *
 from utilities import *
+from config.database import connect
 import petl as etl
 import numpy as np
 import distance
 import math
 
+#used global variables
+db_connection = connect()
+town_codes, town_names = get_registred_towns_data(db_connection)
 
 """---------------------- Transformation to standard structure ----------------------"""
 # pandas dataframe to petl
@@ -26,14 +30,17 @@ def concat_table(table_a, table_b, header):
     return table_b
 
 #Remove duplicates from a petl table
-def remove_duplicates(table, header):
+def remove_rotation_data_duplicates(table, header):
     """
     Arguments
     table: petl table
     Purpose
     This function removes duplicates from a petl table
     """
-    return etl.distinct(table, header)
+    table = etl.distinct(table, header)
+    table = etl.distinct(table, ["ticket", "date", "cet"])
+
+    return table
 
 #change the type of the columns in a pandas dataframe
 def change_columns_type(df, columns_types):
@@ -84,12 +91,11 @@ def structure_rotation_df(df):
         df.dropna(subset = ["vehicle_mat", "vehicle_id"], how="all", inplace=True)
         df.dropna(subset = ["town_code", "town"], how="all", inplace=True)
         df.dropna(subset = ["date", "date_hijri"], how="all", inplace=True)
-        print(df.shape)
+
         #change the type of the columns
         df = change_columns_type(df, rotations_table_types)
         #convert dataframe to petl table
         petl_table = df_to_petl(df)
-        print(petl_table)
 
     return petl_table
 
@@ -123,7 +129,7 @@ def structure_rotations_data(data, sheets=None):
         table = structure_rotation_df(data)
 
     #remove duplicates
-    table = remove_duplicates(table, rotations_table_header)
+    table = remove_rotation_data_duplicates(table, rotations_table_header)
     return table
 
 
@@ -274,6 +280,47 @@ def compare_strings_with_substrings(string1, string2):
                 matches += 1
     return matches
 
+#petl function for handling missing values of town code
+def get_missing_town_value(val, row):
+    """
+    args
+        val: town code in current row
+        row: current row
+    """
+    if val != "nan":
+        if not val in town_codes:
+            return "nan"
+        else:
+            return val
+    if val == "nan" and row['town'].upper() in town_names:        
+        return town_codes[town_names.index(row['town'].upper())]
+
+    return "nan"
+
+#handle missing values on town code and town name
+def transform_missing_town_values(table):
+    """
+    args table: petl table of rotations data
+    puprose: remove inexistent town data in database and handle nan values
+    """
+    table = etl.convert(table, 'town_code', get_missing_town_value, pass_row=True)
+    table = etl.selectisnot(table, 'town_code', 'nan')
+    return table
+
+#Tranfrom towns data (handle names, missing values, etc.)
+def transform_towns_data(table):
+    """
+    args: table: petl table of rotations data
+    """
+
+    #transform towns names
+    table = transform_towns_names(table, towns_list, towns_abbreviations, town_stop_words)
+
+    #handle missing values and inexisting values in database
+    table = transform_missing_town_values(table)
+
+    return table
+
 #hijri to gregorian date and vice versa
 def transform_dates(table):
     """
@@ -295,7 +342,6 @@ def transform_dates(table):
     #transform all dates to same format (dd-mm-yyyy)
     table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
     table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
-    print("ok dagi")
     return table
 
 #petl function to get gregorian date from hijri date
@@ -340,6 +386,32 @@ def get_hijri_date(value, row):
     #if the value is not a correct date and the hijri date is not a correct date
     return "nan"
 
+#petl function to get time
+def get_time(value, row):
+    """
+    params: value: the value of the time column in current row
+            row: the row of the table
+    purpose:
+        This function returns the time 
+    """
+    #check if the value is in any way a correct format of time
+    if is_time(value):
+        return value
+    return "nan"
+
+#transfrom time data
+def transform_time(table):
+    """
+    args: table: petl table of rotations data
+    purpose:
+        This function transforms the time data
+    """
+    #transform the time data
+    table = etl.convert(table, "time", get_time, pass_row=True)	
+    #remove the rows with nan values on time column
+    table = etl.selectisnot(table, "time", "nan")
+    table = etl.selectisnot(table, "time", None)
+    return table
 
 #petl function for replacing net_cet value with net_extra if net_cet is nan
 def net_extra_to_net_cet(val, row):
@@ -351,9 +423,11 @@ def net_extra_to_net_cet(val, row):
     """
 
     if math.isnan(val):
+        if math.isnan(row["net_extra"]):
+            return 0
         return row["net_extra"]
-    else:
-        return val
+    
+    return val
 
 #petl function for calculating the gap value
 def get_tare_weight(val, row):
@@ -382,7 +456,7 @@ def transform_weights(table):
         pass_row=True
     )
     #remove rows with nan value on net_cet
-    table = etl.selectisnot(table, "net_cet", None)
+    table = etl.selectisnot(table, "net_cet", 0)
 
     #calculate the tare 
     #table = etl.convert(table, "tare",get_tare_weight,pass_row = True)
@@ -399,16 +473,16 @@ def transform_rotation_data(data, sheets):
     #transform to a standard structure
     print("data structuring")
     table = structure_rotations_data(data, sheets)
-    print(etl.nrows(table))
     #Transforming towns names in the table
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
-    table = transform_towns_names(table, towns_list, towns_abbreviations, town_stop_words)
-    print(etl.nrows(table))
+    table = transform_towns_data(table)
     #transfroming dates
     print("dates transformation")
     table = transform_dates(table)
-    print("cbon")
+    #transfroming time
+    print("time transformation")
+    table = transform_time(table)
     #transforming weights
     table = transform_weights(table)
 
