@@ -7,7 +7,8 @@ from table.UnityTable import UnityTable
 import petl as etl
 import numpy as np
 import math
-from utilities import concat_table, rotations_table_types, vehicles_table_types
+from utilities import *
+from transform import *
 
 
 #insert rotations to database
@@ -19,22 +20,33 @@ def insert_rotations(data, db_connection):
     Purpose:
         insert rotations data to database
     """
+
+    rotation_header = ["date", "vehicle_id", "ticket", "town_code", "time", "cet", "date_hijri"]
+
+    rotation_header_rename = {"vehicle_id": "id_vehicle", "ticket": "code_ticket", "town_code": "code_town", "time": "heure"}
+
+    table = etl.cut(data, rotation_header)
+    table = etl.distinct(table, "ticket")
+    table = etl.rename(table, rotation_header_rename)
+    etl.todb(table, db_connection, "rotation")
+    """
     #create rotation table instance
     rotation = RotationTable()
 
+    date = date_hijri = ""
     for row in data:
         rotation_dict = {
             "id_vehicle": row["vehicle_id"],
             "code_ticket": row["ticket"],
             "code_town": row["town_code"],
-            "date": row["date"],
-            "date_hijri": row["date_hijri"],
+            "date": date,
+            "date_hijri": date_hijri,
             "heure": row["time"],
             "cet": row["cet"]
         }
         #insert data
         rotation.insert(rotation_dict, db_connection)
-
+    """
 #insert ticket to database
 def insert_ticket(data, db_connection):
     """
@@ -73,12 +85,49 @@ def insert_ticket_table(table, db_connection):
         insert ticket data to database
     """
 
+    #create ticket table instance
+    ticket = TicketTable()
+
     ticket_table_columns = ["code", "brute", "net", "date", "heure", "cet"]
     ticket_table_header_rename = {"ticket": "code", "net_cet":"net","time": "heure"}
-    
+
+    table = etl.distinct(table, "ticket")
+    #remove rows with date = none
+    table = etl.select(table, lambda r: is_date(r["date"]) != False)
     table = etl.rename(table, ticket_table_header_rename)
-    print("ok dagi")
-    etl.todb(table, db_connection, "ticket")
+    table = etl.convert(table, "heure", str)
+    #get rows without nan values on time columns
+    time_table = etl.select(table, lambda r: r["heure"] != "nan" and r["heure"] != None)
+    #remove time coulmns because there is only nan values
+    nan_time_table = etl.select(table, lambda r: r["heure"] == "nan" or r["heure"] == None)
+    nan_time_table = etl.cutout(nan_time_table, "heure")
+
+    #insert ticket with time values
+    values = etl.values(time_table, ticket_table_columns)
+    header = etl.header(time_table)
+    for row in values:
+        ticket_dict = {
+            "code": row[header.index("code")],
+            "brute": row[header.index("brute")],
+            "net": row[header.index("net")],
+            "date": row[header.index("date")],
+            "heure": row[header.index("heure")],
+            "cet": row[header.index("cet")]
+        }
+        ticket.insert(ticket_dict, db_connection)
+    
+    #insert ticket without time values (time = nan)
+    values = etl.values(nan_time_table, ticket_table_columns-["heure"])
+    header = etl.header(nan_time_table)
+    for row in values:
+        ticket_dict = {
+            "code": row[header.index("code")],
+            "brute": row[header.index("brute")],
+            "net": row[header.index("net")],
+            "date": row[header.index("date")],
+            "cet": row[header.index("cet")]
+        }
+        ticket.insert(ticket_dict, db_connection)
 
 #insert vehicles to the database (vehicle table)
 def check_vehicle(table, db_connection):
@@ -216,6 +265,8 @@ def enrich_vehicle_data(table, db_connection):
         lambda v, row: vehicle.get_code_from_mat(row["vehicle_mat"], db_connection),
         where=lambda r: r["vehicle_id"] == "nan"
     )
+
+    table = etl.selectisnot(table, "vehicle_id", "nan")
     
     return table
 
@@ -236,6 +287,8 @@ def enrich_town_data(table, db_connection):
         lambda v, row: town.get_code_from_name(row["town_name"], db_connection), 
         where=lambda r: r["town_code"] == "nan"
     )
+
+    table = etl.selectisnot(table, "town_code", "nan")
     
     return table
 
@@ -254,6 +307,14 @@ def load_rotations(rotation_table):
     #change columns types
     rotation_table = etl.convert(rotation_table, rotations_table_types)
 
+    """ data enrichment """
+    #vehicle data enrichment
+    print("Enriching vehicle data...")
+    rotation_table = enrich_vehicle_data(rotation_table, db_connection)
+    #town data enrichment
+    print("Enriching town data...")
+    rotation_table = enrich_town_data(rotation_table, db_connection)
+
     #check if town exists in database
     #print("Checking town data...")
     #rotation_table = check_town(rotation_table, db_connection)
@@ -264,13 +325,6 @@ def load_rotations(rotation_table):
     #print("Checking vehicle data...")
     #rotation_table = check_vehicle(rotation_table, db_connection)
 
-    """ data enrichment """
-    #vehicle data enrichment
-    print("Enriching vehicle data...")
-    #rotation_table = enrich_vehicle_data(rotation_table, db_connection)
-    #town data enrichment
-    print("Enriching town data...")
-    #rotation_table = enrich_town_data(rotation_table, db_connection)
 
     #extract important columns from rotation table
     rotations_data = etl.dicts(rotation_table)
