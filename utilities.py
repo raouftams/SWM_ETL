@@ -2,11 +2,11 @@ import requests
 from dateutil.parser import parse
 import petl as etl
 import time
-from config.database import connect
 from table.TownTable import TownTable
+from hijri_converter import Hijri, Gregorian
 
 #Rotation data column names
-rotations_table_header = ["vehicle_mat", "vehicle_id", "town", "town_code", "unit", "unit_code", "date", "date_hijri", "time", "net_extra", "gap", "net_cet", "tare", "brute", "ticket", "cet"]
+rotations_table_header = ["vehicle_mat", "vehicle_id", "town", "town_code", "date", "date_hijri", "time", "net_extra", "net_cet", "tare", "brute", "ticket", "cet"]
 
 #dict of column names and renaming rules
 rotations_table_renaming = {
@@ -19,15 +19,13 @@ rotations_table_renaming = {
                     "tare véhicule": "tare",
                     "t/véhicule": "tare",
                     "tare véh": "tare",
+                    "tare (kg)": "tare",
                     "commune": "town",
                     "commune d'intervention": "town",
                     "codec": "town_code",
                     "code c": "town_code",
                     "code commune": "town_code",
                     "nom client": "town",
-                    "unité": "unit",
-                    "code u": "unit_code",
-                    "codeu": "unit_code", 
                     "heure": "time",
                     "heure 1": "time",
                     "h/ 1": "time",
@@ -41,6 +39,8 @@ rotations_table_renaming = {
                     'poids net': 'net_cet',
                     "p/ net": "net_cet",
                     'p/net': 'net_cet',
+                    "net cet (kg)": "net_cet",
+                    "net extra (kg)": "net_extra",
                     "net extr": "net_extra",
                     "net extra": "net_extra",
                     "extra net": "net_extra",
@@ -51,10 +51,6 @@ rotations_table_renaming = {
                     "brut": "brute",
                     "brut22": "brute",
                     "brut (kg)": "brute",
-                    "ecart": "gap",
-                    "écart": "gap",
-                    "différence": "gap",
-                    "diff": "gap",
                     "datehijri": "date_hijri",
 }
 
@@ -64,9 +60,6 @@ rotations_table_types = {
         "vehicle_id" : str,
         "town_code" : str,
         "town": str,
-        "unit_code" : str,
-        "unit": str,
-        "gap" : float,
         "date": str,
         "date_hijri": str,
         "time" : str,
@@ -201,21 +194,15 @@ def gregorian_to_hijri_date(date: str):
     params: date in format "dd-mm-yyyy"
     return: corresponding hijri date in format "dd-mm-yyyy" and array of islamic holidays if they exist
     """
-    #if date is in format "dd-mm-yyyy hh:mm:ss" we remove the time
-    date = date.split(" ")[0]
-    # if date in in format "dd/mm/yyyy" we convert it to "dd-mm-yyyy"
-    if not "-" in date:
-        date = date.replace("/", "-")
-    #if date is in format "yyyy-mm-dd" we convert it to "dd-mm-yyyy"
-    y, m, d = date.split("-")
-    if int(y) > 100:
-        date = d + "-" + m + "-" + y
+    format_date(date)
 
     #get the corresponding hijri date
-    url = "https://api.aladhan.com/v1/gToH?date={}".format(date)
-    r = requests.get(url)
-    data = r.json()["data"]
-    return data["hijri"]["date"]
+    #url = "https://api.aladhan.com/v1/gToH?date={}".format(date)
+    #r = requests.get(url)
+    #data = r.json()["data"]
+    #return data["hijri"]["date"]
+
+    return Gregorian.fromisoformat(date).to_hijri().isoformat()
 
 
 #get gregorian date from a hijri date
@@ -224,22 +211,15 @@ def hijri_to_gregorian_date(date: str):
     params: date in format "dd-mm-yyyy"
     return: corresponding gregorian date in format "dd-mm-yyyy" 
     """
-    #if date is in format "dd-mm-yyyy hh:mm:ss" we remove the time
-    date = date.split(" ")[0]
-    # if date in in format "dd/mm/yyyy" we convert it to "dd-mm-yyyy"
-    if not "-" in date:
-        date = date.replace("/", "-")
-    
-    #if date is in format "yyyy-mm-dd" we convert it to "dd-mm-yyyy"
-    y, m, d = date.split("-")
-    if int(y) > 100:
-        date = d + "-" + m + "-" + y
+    date = format_date(date)
 
     #get the corresponding gregorian date
-    url = "https://api.aladhan.com/v1/hToG?date={}".format(date)
-    r = requests.get(url)
-    data = r.json()["data"]
-    return data["gregorian"]["date"]
+    #url = "https://api.aladhan.com/v1/hToG?date={}".format(date)
+    #r = requests.get(url)
+    #data = r.json()["data"]
+    #return str(data["gregorian"]["date"])
+    
+    return Hijri.fromisoformat(date).to_gregorian().isoformat()
 
 
 #check if a string has any format of a date
@@ -257,6 +237,21 @@ def is_date(string, fuzzy=False):
 
     except ValueError:
         return False
+
+#transform date to "yyyy-mm-dd" format
+def format_date(date: str):
+    #if date is in format "dd-mm-yyyy hh:mm:ss" we remove the time
+    date = date.split(" ")[0]
+    #if date in in format "dd/mm/yyyy"
+    if not "-" in date:
+        date = date.replace("/", "-")
+    
+    #if date is in format "dd-mm-yyyy" we convert it to "yyyy-mm-dd"
+    y, m, d = date.split("-")
+    if int(y) < 100:
+        date = d + "-" + m + "-" + y
+
+    return date
 
 #check if a string is time format
 def is_time(input):
