@@ -1,3 +1,4 @@
+from matplotlib.pyplot import axis
 from extract import *
 from utilities import *
 from config.database import connect
@@ -5,6 +6,7 @@ import petl as etl
 import numpy as np
 import distance
 import math
+from hijri_converter import Hijri, Gregorian
 
 #used global variables
 db_connection = connect()
@@ -257,8 +259,6 @@ def transform_towns_names(table, towns_names, town_abbreviations=None, stop_word
         if old_name != 'nan':
             table = etl.convert(table, "town", {old_name: towns_names_dict[old_name]})
     
-    #removing all lines with nan value on town column
-    table = etl.selectisnot(table, "town", "nan")
     return table
 
 #comparing strings with number of matches
@@ -321,29 +321,6 @@ def transform_towns_data(table):
 
     return table
 
-#hijri to gregorian date and vice versa
-def transform_dates(table):
-    """
-    parms:
-        table: a petl table
-    purpose:
-        This function transforms the dates (hijri to gregorian and gregorian to hijri)
-    """    
-
-    #transform the hijri to gregorian dates
-    table = etl.convert(table, "date", get_gregorian_date, pass_row=True)
-    #transform the gregorian to hijri dates
-    table = etl.convert(table, "date_hijri", get_hijri_date, pass_row=True)
-    #remove the rows with nan values on date column
-    table = etl.selectisnot(table, "date", "nan")
-    #remove the rows with nan values on date_hijri column
-    table = etl.selectisnot(table, "date_hijri", "nan")
-
-    #transform all dates to same format (dd-mm-yyyy)
-    table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
-    table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
-    return table
-
 #petl function to get gregorian date from hijri date
 def get_gregorian_date(value, row):
     """
@@ -354,7 +331,7 @@ def get_gregorian_date(value, row):
     """
     #check if the value is in any way a correct format of date
     if is_date(value):
-        return value
+        return format_date(value)
     else: #the value is not a correct date
         #get the hijri date from the current row
         current_hijri_date = row["date_hijri"]
@@ -375,7 +352,7 @@ def get_hijri_date(value, row):
     """
     #check if the value is in any way a correct format of date
     if is_date(value):
-        return value
+        return format_date(value)
     else: #the value is not a correct date
         #get the gregorian date from the current row
         current_gregorian_date = row["date"]
@@ -385,6 +362,32 @@ def get_hijri_date(value, row):
             return gregorian_to_hijri_date(current_gregorian_date)
     #if the value is not a correct date and the hijri date is not a correct date
     return "nan"
+
+#hijri to gregorian date and vice versa
+def transform_dates(table):
+    """
+    parms:
+        table: a petl table
+    purpose:
+        This function transforms the dates (hijri to gregorian and gregorian to hijri)
+    """
+
+    #transform the hijri to gregorian dates
+    table = etl.convert(table, "date", get_gregorian_date, pass_row=True)
+    #transform the gregorian to hijri dates
+    table = etl.convert(table, "date_hijri", get_hijri_date, pass_row=True)
+    #remove the rows with nan values on date column
+    table = etl.selectisnot(table, "date", "nan")
+    table = etl.selectnone(table, "date")
+    #remove the rows with nan values on date_hijri column
+    table = etl.selectisnot(table, "date_hijri", "nan")
+    table = etl.selectnone(table, "date_hijri")
+   
+    #transform all dates to same format (dd-mm-yyyy)
+    table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
+    table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
+    return table
+
 
 #petl function to get time
 def get_time(value, row):
@@ -409,8 +412,8 @@ def transform_time(table):
     #transform the time data
     table = etl.convert(table, "time", get_time, pass_row=True)	
     #remove the rows with nan values on time column
-    table = etl.selectisnot(table, "time", "nan")
-    table = etl.selectisnot(table, "time", None)
+    #table = etl.selectisnot(table, "time", "nan")
+    #table = etl.selectisnot(table, "time", None)
     return table
 
 #petl function for replacing net_cet value with net_extra if net_cet is nan
@@ -464,7 +467,7 @@ def transform_weights(table):
     return table
 
 #general function for transforming rotation data
-def transform_rotation_data(data, sheets):
+def transform_rotation_data(data, sheets=None):
     """
     params: 
             data: a dict of pandas dataframes
@@ -473,6 +476,7 @@ def transform_rotation_data(data, sheets):
     #transform to a standard structure
     print("data structuring")
     table = structure_rotations_data(data, sheets)
+    etl.convert(table, rotations_table_types)
     #Transforming towns names in the table
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
@@ -484,6 +488,7 @@ def transform_rotation_data(data, sheets):
     print("time transformation")
     table = transform_time(table)
     #transforming weights
+    print("weights transformation")
     table = transform_weights(table)
 
     return table
