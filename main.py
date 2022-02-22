@@ -10,9 +10,12 @@ def main():
     sys.setrecursionlimit(10000)
     
     path = "D:\PFE M2\data\\new_data\BDD Rotations 2018-2019.xlsx"
+    #data, sheets = extract_data_from_file(path)
+    #table = transform_rotation_data(data, sheets)
+    #etl.topickle(table, "out/rotations_table.pkl")
+    table = etl.frompickle("out/rotations_table.pkl")
     
-    table = etl.frompickle("out/rotations_table_final.pkl")
-    
+    print(etl.nrows(table))
     load_rotations(table)
     print("end")
 
