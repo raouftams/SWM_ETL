@@ -377,12 +377,10 @@ def transform_dates(table):
     #transform the gregorian to hijri dates
     table = etl.convert(table, "date_hijri", get_hijri_date, pass_row=True)
     #remove the rows with nan values on date column
-    table = etl.selectisnot(table, "date", "nan")
-    table = etl.selectnone(table, "date")
+    table = etl.select(table, lambda row: is_date(row["date"]) != False)
     #remove the rows with nan values on date_hijri column
-    table = etl.selectisnot(table, "date_hijri", "nan")
-    table = etl.selectnone(table, "date_hijri")
-   
+    table = etl.select(table, lambda row: is_date(row["date_hijri"]) != False)
+    
     #transform all dates to same format (dd-mm-yyyy)
     table = etl.convert(table, "date", lambda v: str(v).replace("/", "-").split(" ")[0])
     table = etl.convert(table, "date_hijri", lambda v: str(v).replace("/", "-").split(" ")[0])
@@ -446,23 +444,41 @@ def get_tare_weight(val, row):
         #the net_cet value can't be nan because the nan values are already deleted
         if not math.isnan(row['brute']):
             return row['brute'] - row['net_cet']
-    
+        return 0
+    return val
+
+#petl function for calculating the brute weight value
+def get_brute_weight(val, row):
+    """
+    params: val: the value of the net_cet column in current row
+            row: the row of the table
+    purpose:
+        This function calculates the brute values if it's nan
+    """
+    #check if the current value is nan
+    if math.isnan(val):
+        #check if tare value is nan
+        #the net_cet value can't be nan because the nan values are already deleted
+        if not math.isnan(row['tare']):
+            return row['net_cet'] + row['tare']
+        return 0
+    if val == None:
+        return 0
     return val
 
 #clean net weight
 def transform_weights(table):
     #replace net_cet nan values with net_extra values
-    table = etl.convert(
-        table,
-        "net_cet", 
-        net_extra_to_net_cet,
-        pass_row=True
-    )
+    table = etl.convert(table,"net_cet", net_extra_to_net_cet,pass_row=True)
+
     #remove rows with nan value on net_cet
     table = etl.selectisnot(table, "net_cet", 0)
 
+    #fill missing brute values
+    table = etl.convert(table, "brute",get_brute_weight,pass_row = True)
+    table = etl.convert(table, "brute", lambda x: x if x != None else 0)
     #calculate the tare 
-    #table = etl.convert(table, "tare",get_tare_weight,pass_row = True)
+    table = etl.convert(table, "tare",get_tare_weight,pass_row = True)
     
     return table
 
@@ -490,6 +506,7 @@ def transform_rotation_data(data, sheets=None):
     #transforming weights
     print("weights transformation")
     table = transform_weights(table)
+
 
     return table
 
