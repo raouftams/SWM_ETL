@@ -25,28 +25,22 @@ def insert_rotations(data, db_connection):
 
     rotation_header_rename = {"vehicle_id": "id_vehicle", "ticket": "code_ticket", "town_code": "code_town", "time": "heure"}
 
+    #select rotation table header and rename it
     table = etl.cut(data, rotation_header)
-    table = etl.distinct(table, "ticket")
     table = etl.rename(table, rotation_header_rename)
-    etl.todb(table, db_connection, "rotation")
-    """
-    #create rotation table instance
-    rotation = RotationTable()
 
-    date = date_hijri = ""
-    for row in data:
-        rotation_dict = {
-            "id_vehicle": row["vehicle_id"],
-            "code_ticket": row["ticket"],
-            "code_town": row["town_code"],
-            "date": date,
-            "date_hijri": date_hijri,
-            "heure": row["time"],
-            "cet": row["cet"]
-        }
-        #insert data
-        rotation.insert(rotation_dict, db_connection)
-    """
+    #get rows without nan values on time columns
+    time_table = etl.select(table, lambda r: is_time(r["heure"]) != False)
+    #remove time coulmns because there is only nan values
+    nan_time_table = etl.select(table, lambda r: is_time(r["heure"]) == False)
+    nan_time_table = etl.cutout(nan_time_table, "heure")
+    
+
+    #insert data
+    etl.appenddb(time_table, db_connection, "rotation")
+    #insert nan time values
+    etl.appenddb(nan_time_table, db_connection, "rotation")
+
 #insert ticket to database
 def insert_ticket(data, db_connection):
     """
@@ -83,52 +77,27 @@ def insert_ticket_table(table, db_connection):
         db_connection: psycopg2 db connection instance
     Purpose:
         insert ticket data to database
-    """
+    """    
 
-    #create ticket table instance
-    ticket = TicketTable()
-
-    ticket_table_columns = ["code", "brute", "net", "date", "heure", "cet"]
     ticket_table_header_rename = {"ticket": "code", "net_cet":"net","time": "heure"}
 
-    table = etl.distinct(table, "ticket")
     #remove rows with date = none
-    table = etl.select(table, lambda r: is_date(r["date"]) != False)
     table = etl.rename(table, ticket_table_header_rename)
     table = etl.convert(table, "heure", str)
+
     #get rows without nan values on time columns
-    time_table = etl.select(table, lambda r: r["heure"] != "nan" and r["heure"] != None)
+    time_table = etl.select(table, lambda r: is_time(r["heure"]) != False)
     #remove time coulmns because there is only nan values
-    nan_time_table = etl.select(table, lambda r: r["heure"] == "nan" or r["heure"] == None)
+    nan_time_table = etl.select(table, lambda r: is_time(r["heure"]) == False)
     nan_time_table = etl.cutout(nan_time_table, "heure")
-
-    #insert ticket with time values
-    values = etl.values(time_table, ticket_table_columns)
-    header = etl.header(time_table)
-    for row in values:
-        ticket_dict = {
-            "code": row[header.index("code")],
-            "brute": row[header.index("brute")],
-            "net": row[header.index("net")],
-            "date": row[header.index("date")],
-            "heure": row[header.index("heure")],
-            "cet": row[header.index("cet")]
-        }
-        ticket.insert(ticket_dict, db_connection)
     
-    #insert ticket without time values (time = nan)
-    values = etl.values(nan_time_table, ticket_table_columns-["heure"])
-    header = etl.header(nan_time_table)
-    for row in values:
-        ticket_dict = {
-            "code": row[header.index("code")],
-            "brute": row[header.index("brute")],
-            "net": row[header.index("net")],
-            "date": row[header.index("date")],
-            "cet": row[header.index("cet")]
-        }
-        ticket.insert(ticket_dict, db_connection)
 
+    #insert data
+    etl.appenddb(time_table, db_connection, "ticket")
+    #insert nan time values
+    etl.appenddb(nan_time_table, db_connection, "ticket")
+
+    
 #insert vehicles to the database (vehicle table)
 def check_vehicle(table, db_connection):
     """
@@ -307,6 +276,9 @@ def load_rotations(rotation_table):
     #change columns types
     rotation_table = etl.convert(rotation_table, rotations_table_types)
 
+    #select data with distinct ticket_code, date and cet
+    rotation_table = etl.distinct(rotation_table, ["ticket", "date", "cet"])
+
     """ data enrichment """
     #vehicle data enrichment
     print("Enriching vehicle data...")
@@ -316,22 +288,23 @@ def load_rotations(rotation_table):
     rotation_table = enrich_town_data(rotation_table, db_connection)
 
     #check if town exists in database
-    #print("Checking town data...")
-    #rotation_table = check_town(rotation_table, db_connection)
+    print("Checking town data...")
+    rotation_table = check_town(rotation_table, db_connection)
+    #check if vehicle exists in database
+    print("Checking vehicle data...")
+    rotation_table = check_vehicle(rotation_table, db_connection)
     #chekc if ticket exists in database
     print("Checking ticket data...")
     rotation_table = check_ticket(rotation_table, db_connection)
-    #check if vehicle exists in database
-    #print("Checking vehicle data...")
-    #rotation_table = check_vehicle(rotation_table, db_connection)
+    
 
 
     #extract important columns from rotation table
-    rotations_data = etl.dicts(rotation_table)
+    #rotations_data = etl.dicts(rotation_table)
 
     #load rotations data to the database
     print("Loading rotations data to the database...")
-    insert_rotations(rotations_data, db_connection)
+    insert_rotations(rotation_table, db_connection)
 
 
 #load vehicles data to database
