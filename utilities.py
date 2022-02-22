@@ -231,6 +231,8 @@ def is_date(string, fuzzy=False):
     :param string: str, string to check for date
     :param fuzzy: bool, ignore unknown tokens in string if True
     """
+    if string == None:
+        return False
     try: 
         parse(string, fuzzy=fuzzy)
         return True
@@ -255,6 +257,8 @@ def format_date(date: str):
 
 #check if a string is time format
 def is_time(input):
+    if input == None or type(input) != str:
+        return False
     try:
         time.strptime(input, '%H:%M:%S')
         return True
