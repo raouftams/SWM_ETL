@@ -1,4 +1,4 @@
-from table.table import Table
+from table.Table import Table
 
 class TicketTable(Table):
 
