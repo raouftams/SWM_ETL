@@ -6,6 +6,14 @@ class VehicleTable(Table):
         super().__init__("vehicle")
     
 
+    #get all vehicles codes and matricules
+    def get_all(self, db_connection):
+        cursor = db_connection.cursor()
+        cursor.execute("select code, ancien_matricule, nouveau_matricule from vehicle")
+        result = cursor.fetchall()
+        cursor.close()
+        return result
+
     #check if matricule exists in database
     def exists_mat(self, mat, db_connection):
         """
