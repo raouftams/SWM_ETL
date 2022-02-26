@@ -11,6 +11,7 @@ from hijri_converter import Hijri, Gregorian
 #used global variables
 db_connection = connect()
 town_codes, town_names = get_registred_towns_data(db_connection)
+vehicles_codes, vehicles_mats = get_registred_vehicles_data(db_connection)
 
 """---------------------- Transformation to standard structure ----------------------"""
 # pandas dataframe to petl
@@ -193,7 +194,7 @@ def write_petl_table_to_csv(table, path):
 
 """---------------------- Cleaning data ----------------------"""
 #changing the towns names
-def transform_towns_names(table, towns_names, town_abbreviations=None, stop_words=None):
+def transform_towns_names(table, town_abbreviations=None, stop_words=None):
     """
     Arguments
     table: petl table
@@ -225,31 +226,31 @@ def transform_towns_names(table, towns_names, town_abbreviations=None, stop_word
                 towns_names_dict[old_name] = town_abbreviations[lower_old_name]
             
             else:
-                for i in range(len(towns_names)):
+                for i in range(len(town_names)):
                     #check if a substring of the old name is in the towns names
-                    if compare_strings_with_substrings(lower_old_name, towns_names[i]) > 1:
+                    if compare_strings_with_substrings(lower_old_name, str.lower(town_names[i])) > 1:
                         #if there are more than one match, the town is not changed
-                        towns_names_dict[old_name] = towns_names[i]
+                        towns_names_dict[old_name] = town_names[i]
                         
                 #initializing the nearest string in towns_names to the string at position -1
                 nearest = 0
-                min_distance = distance.levenshtein(lower_old_name, str.lower(towns_names[0]))
-                for i in range(len(towns_names)):
+                min_distance = distance.levenshtein(lower_old_name, str.lower(town_names[0]))
+                for i in range(len(town_names)):
                     #calculate the distance between the old name and the current town name
-                    current_distance = distance.levenshtein(lower_old_name, str.lower(towns_names[i]))
+                    current_distance = distance.levenshtein(lower_old_name, str.lower(town_names[i]))
                     if current_distance < min_distance:
                         min_distance = current_distance
                         nearest = i
 
                 #check the which one is the nearest by number of matches in their substrings before assigning the town name
                 if old_name in towns_names_dict.keys():
-                    if compare_strings_with_substrings(old_name, towns_names[nearest]) > compare_strings_with_substrings(old_name, towns_names_dict[old_name]):
-                        towns_names_dict[old_name] = towns_names[nearest]
+                    if compare_strings_with_substrings(str.lower(old_name), str.lower(town_names[nearest])) > compare_strings_with_substrings(old_name, towns_names_dict[old_name]):
+                        towns_names_dict[old_name] = town_names[nearest]
                 else:
-                    if compare_strings_with_substrings(old_name, towns_names[nearest]) == 0:
+                    if compare_strings_with_substrings(str.lower(old_name), str.lower(town_names[nearest])) == 0:
                         towns_names_dict[old_name] = 'nan'
                     else:
-                        towns_names_dict[old_name] = towns_names[nearest]
+                        towns_names_dict[old_name] = town_names[nearest]
                 
         else: # lower_old_name = ""
             towns_names_dict[old_name] = 'nan'
@@ -287,15 +288,13 @@ def get_missing_town_value(val, row):
         val: town code in current row
         row: current row
     """
-    if val != "nan":
-        if not val in town_codes:
+    if val not in town_codes:
+        if row["town"].upper() == "nan" or row["town"] not in town_names:
             return "nan"
         else:
-            return val
-    if val == "nan" and row['town'].upper() in town_names:        
-        return town_codes[town_names.index(row['town'].upper())]
-
-    return "nan"
+            index = town_names.index(row['town'].upper())        
+            return town_codes[index]
+    return val
 
 #handle missing values on town code and town name
 def transform_missing_town_values(table):
@@ -314,12 +313,51 @@ def transform_towns_data(table):
     """
 
     #transform towns names
-    table = transform_towns_names(table, towns_list, towns_abbreviations, town_stop_words)
+    table = transform_towns_names(table, towns_abbreviations, town_stop_words)
 
     #handle missing values and inexisting values in database
     table = transform_missing_town_values(table)
 
     return table
+
+
+#petl lambda function to check the existence of a vehicle id
+def check_vehicle_id(value, row):
+    """
+    value: current vehicle id value
+    row: current table row
+    purpose: check if value exists in db and replace it with "nan_id" if not
+    """
+
+    #check if vehicle id doesn't exist in db
+    
+    if value not in vehicles_codes:
+        #check if matricule exists
+        if row["vehicle_mat"] == "nan" or row["vehicle_mat"] not in vehicles_mats:
+            return "nan_id"
+        else: #matricule exists in db
+            #get the correspondant id of the matricule
+            #vehicles_mats array contains old and new matricules of the vehicle
+            index = vehicles_mats.index(row["vehicle_mat"])
+            return vehicles_codes[int(index/2)]
+    return value
+
+#Transfrom vehicles data for rotations table
+def transform_rotation_vehicle_data(table):
+    """
+    Args: table of rotations data
+    return: table of rotations data
+    purpose: remove rotations with inexisting vehicle code in db
+    """
+
+    #first step is to convert inexistent vehicle id to "nan_id"
+    table = etl.convert(table, "vehicle_id", check_vehicle_id, pass_row=True)
+    #remove all rows with "nan_id" value on vehicle_id column
+    table = etl.selectisnot(table, "vehicle_id", "nan_id")
+    table = etl.selectnotnone(table, "vehicle_id")
+
+    return table        
+
 
 #petl function to get gregorian date from hijri date
 def get_gregorian_date(value, row):
@@ -497,6 +535,9 @@ def transform_rotation_data(data, sheets=None):
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
     table = transform_towns_data(table)
+    #transform vehicles codes
+    print("vehicles transfromation")
+    table = transform_rotation_vehicle_data(table)
     #transfroming dates
     print("dates transformation")
     table = transform_dates(table)
