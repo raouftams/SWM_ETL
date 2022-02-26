@@ -106,29 +106,8 @@ def check_vehicle(table, db_connection):
     Purpose:
         check if vehicles exist in database
     """
-    #create vehicle table instance
-    vehicle = VehicleTable()
-
-    #extract vehicles data from table and transform into numpy array
-    vehicles_array = etl.values(etl.distinct(table, ["vehicle_id", "vehicle_mat"]), ["vehicle_id", "vehicle_mat"])
-    #remove rows with vehicle_id = nan or vehicle_mat = nan or do not exist in the database
-    for row in vehicles_array:
-        #if vehicle data is nan
-        if row[0] == "nan" and row[1] == "nan":
-            #remove rows
-            table = etl.selectisnot(table, {"vehicle_id": row[0], "vehicle_mat": row[1]})
-        else:
-            #check if exists in database
-            #check if code exists
-            if row[0] != "nan" and not vehicle.exists(row[0], db_connection):
-                #remove row
-                table = etl.selectisnot(table, "vehicle_id", row[0])
-            else:
-                #check if mat exists
-                if row[1] != "nan" and row[0] == "nan" and not vehicle.exists_mat(row[1], db_connection):
-                    #remove row
-                    table = etl.selectisnot(table, "vehicle_mat", row[1])
-    
+    table = etl.convert(table, "vehicle_id", check_vehicle_id, pass_row=True)
+    table = etl.select(table, "vehicle_id", lambda v: v != "nan_id" and v != "nan")
     return table
 
 #insert tickets to the database (ticket table)
@@ -148,25 +127,6 @@ def check_ticket(table, db_connection):
 
     #extract tickets data from table 
     tickets_array = etl.cut(table, "ticket", "brute", "net_cet", "date", "time", "cet")
-    """
-    #remove rows with ticket_code = nan or does not exist in the database
-    for code_t in tickets_array:
-        #check if the ticket exists in database
-        if code_t == "nan":
-            #remove rows
-            table = etl.selectisnot(table, "ticket", code_t)
-        if not ticket.exists(code_t, db_connection):
-            #insert ticket data to database
-            #select ticket data
-            ticket_data = etl.select(table, lambda row: row["ticket"] == code_t)
-            #transform ticket data into dict
-            #ticket_data = etl.dicts(ticket_data)
-            #concat ticket data
-            ticket_table = concat_table(ticket_table, ticket_data, ["ticket", "brute", "net_cet", "date", "time"])
-            print(ticket_table)
-            #insert ticket data to database
-            #insert_ticket(ticket_data[0], db_connection)
-    """
     
     insert_ticket_table(tickets_array, db_connection)
     return table
@@ -190,9 +150,8 @@ def check_town(table, db_connection):
 
     #extract towns data from table and transform into numpy array
     towns_array = etl.toarray(towns_table)
-    print("ok")
+
     towns_array = np.unique(towns_array, axis=0)
-    print("ok2")
     #remove rows with code_commune = nan or does not exist in the database
     for row in towns_array:
         code_c = row[0]
@@ -207,7 +166,7 @@ def check_town(table, db_connection):
             if code_c != "nan" and not town.exists(code_c, db_connection):
                 #remove rows
                 print("removed 1")
-                table = etl.selectisnot(table, "town_code", code_c)
+                table = etl.select(table, "town_code", lambda v: v != code_c)
             else:
                 #check if name exists
                 if name_c != "nan" and code_c == "nan" and not town.exists_name(name_c, db_connection):
@@ -279,28 +238,8 @@ def load_rotations(rotation_table):
     #select data with distinct ticket_code, date and cet
     rotation_table = etl.distinct(rotation_table, ["ticket", "date", "cet"])
 
-    """ data enrichment """
-    #vehicle data enrichment
-    print("Enriching vehicle data...")
-    rotation_table = enrich_vehicle_data(rotation_table, db_connection)
-    #town data enrichment
-    print("Enriching town data...")
-    rotation_table = enrich_town_data(rotation_table, db_connection)
-
-    #check if town exists in database
-    print("Checking town data...")
-    rotation_table = check_town(rotation_table, db_connection)
-    #check if vehicle exists in database
-    print("Checking vehicle data...")
-    rotation_table = check_vehicle(rotation_table, db_connection)
-    #chekc if ticket exists in database
     print("Checking ticket data...")
     rotation_table = check_ticket(rotation_table, db_connection)
-    
-
-
-    #extract important columns from rotation table
-    #rotations_data = etl.dicts(rotation_table)
 
     #load rotations data to the database
     print("Loading rotations data to the database...")
