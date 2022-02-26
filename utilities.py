@@ -5,6 +5,8 @@ import time
 from table.TownTable import TownTable
 from hijri_converter import Hijri, Gregorian
 
+from table.VehicleTable import VehicleTable
+
 #Rotation data column names
 rotations_table_header = ["vehicle_mat", "vehicle_id", "town", "town_code", "date", "date_hijri", "time", "net_extra", "net_cet", "tare", "brute", "ticket", "cet"]
 
@@ -286,9 +288,30 @@ def get_registred_towns_data(db_connection):
     """
     instance = TownTable()
     data = instance.get_all(db_connection)
-    town_names = town_codes = []
+    town_names = []
+    town_codes = []
     for r in data:
         town_names.append(r[1]) 
         town_codes.append(r[0])
     
     return town_codes, town_names
+
+#get vehicles registred in db
+def get_registred_vehicles_data(db_connection):
+    """
+    return: an array of vehicles codes
+    """
+
+    instance = VehicleTable()
+    data = instance.get_all(db_connection)
+    codes = []
+    matricules = []
+    for r in data:
+        #append vehicle code or id
+        codes.append(r[0])
+        #append old matricule value
+        matricules.append(r[1])
+        #append new matricule value
+        matricules.append(r[2])
+        
+    return codes, matricules
