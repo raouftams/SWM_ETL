@@ -9,12 +9,13 @@ import sys
 def main():
     sys.setrecursionlimit(10000)
     
-    path = "home/tamssaout/Bureau/data/new_data/BDD Rotations 2018-2019.xlsx"
+    #path = "/home/tamssaout/Bureau/data/new_data/BDD Rotations 2018-2019.xlsx"
+    #print("data extraction")
     #data, sheets = extract_data_from_file(path)
     #table = transform_rotation_data(data, sheets)
-    #etl.topickle(table, "out/rotations_table.pkl")
-    table = etl.frompickle("out/rotations_table.pkl")
+    #etl.topickle(table, "out/rotations_table2.pkl")
     
+    table = etl.frompickle("out/rotations_table2.pkl")
     print(etl.nrows(table))
     load_rotations(table)
     print("end")
