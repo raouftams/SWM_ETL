@@ -1,4 +1,3 @@
-from matplotlib.pyplot import axis
 from extract import *
 from utilities import *
 from config.database import connect
@@ -6,7 +5,6 @@ import petl as etl
 import numpy as np
 import distance
 import math
-from hijri_converter import Hijri, Gregorian
 
 #used global variables
 db_connection = connect()
@@ -125,9 +123,11 @@ def structure_rotations_data(data, sheets=None):
             if sheet_name != "TOTAL" and sheet_name != "CET":
                 #get the current sheet
                 df = data[sheet_name]
-                petl_table = structure_rotation_df(df)
-                #concatenate the petl table with the previous table
-                table = concat_table(table, petl_table, rotations_table_header)
+                if not df.empty:
+                    petl_table = structure_rotation_df(df)
+
+                    #concatenate the petl table with the previous table
+                    table = concat_table(table, petl_table, rotations_table_header)
     else:
         table = structure_rotation_df(data)
 
@@ -289,7 +289,7 @@ def get_missing_town_value(val, row):
         row: current row
     """
     if val not in town_codes:
-        if row["town"].upper() == "nan" or row["town"] not in town_names:
+        if row["town"] == "nan" or row["town"].upper() not in town_names:
             return "nan"
         else:
             index = town_names.index(row['town'].upper())        
@@ -321,6 +321,25 @@ def transform_towns_data(table):
     return table
 
 
+#transform vehicle's matricule to correct format
+def format_matricule(mat):
+    #check if the matricule is not already formated
+    if "-" not in mat:
+        #check if length is a least 5 caracters
+        if len(mat) >= 5:
+            mat_end = "-" + mat[len(mat)-2:]
+            if mat[len(mat)-4:len(mat)-2] == "00":
+                middle_mat = "-" + mat[len(mat)-4:len(mat)-2]
+                mat_start = mat[:len(mat)-4]
+            else:
+                middle_mat = "-" + mat[len(mat)-5:len(mat)-2]
+                mat_start = mat[:len(mat)-5]
+
+            return mat_start + middle_mat + mat_end
+
+    return mat
+
+
 #petl lambda function to check the existence of a vehicle id
 def check_vehicle_id(value, row):
     """
@@ -349,7 +368,8 @@ def transform_rotation_vehicle_data(table):
     return: table of rotations data
     purpose: remove rotations with inexisting vehicle code in db
     """
-
+    #check if vehicle's matricule is in correct format and format it if not
+    table = etl.convert(table, "vehicle_mat", format_matricule)
     #first step is to convert inexistent vehicle id to "nan_id"
     table = etl.convert(table, "vehicle_id", check_vehicle_id, pass_row=True)
     #remove all rows with "nan_id" value on vehicle_id column
@@ -535,6 +555,7 @@ def transform_rotation_data(data, sheets=None):
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
     table = transform_towns_data(table)
+    print(table)
     #transform vehicles codes
     print("vehicles transfromation")
     table = transform_rotation_vehicle_data(table)
