@@ -138,9 +138,9 @@ towns_list = [
 #some town names abbreviations
 towns_abbreviations = {
     "bez": "Bab Ezzouar",
-    "bek": "Borj El Kiffan",
-    "deb": "Dar El Beïda",
-    "beb": "Borj El Bahri",
+    "bek": "Bordj El Kiffan",
+    "deb": "Dar El Beida",
+    "beb": "Bordj El Bahri",
 }
 
 #stop words for towns names
