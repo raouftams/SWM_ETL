@@ -12,19 +12,20 @@ class TownTable(Table):
             db_connection: psycopg2 db connection instance
         Get all towns
         """
-        #create cursor
-        cursor = db_connection.cursor()
-        #execute query
-        cursor.execute("SELECT code, name FROM commune")
-        #get result
-        result = cursor.fetchall()
-        #close cursor
-        cursor.close()
-        #check if result is empty
-        if result != []:
-            return result
-        
-        return None
+        if db_connection != None:
+            #create cursor
+            cursor = db_connection.cursor()
+            #execute query
+            cursor.execute("SELECT code, name FROM commune")
+            #get result
+            result = cursor.fetchall()
+            #close cursor
+            cursor.close()
+            #check if result is empty
+            if result != []:
+                return result
+
+            return None
 
     #check if town name exists
     def exists_name(self, name, db_connection):
@@ -35,21 +36,21 @@ class TownTable(Table):
         purpose
             check if town name exists in database
         """
+        if db_connection != None:
+            #create cursor
+            cursor = db_connection.cursor()
 
-        #create cursor
-        cursor = db_connection.cursor()
+            #execute query
+            cursor.execute("SELECT * FROM commune WHERE name = '{}'".format(name.upper()))
+            #get result
+            result = cursor.fetchall()
+            #close cursor
+            cursor.close()
+            #check if result is empty
+            if result != []:
+                return True
 
-        #execute query
-        cursor.execute("SELECT * FROM commune WHERE name = '{}'".format(name.upper()))
-        #get result
-        result = cursor.fetchall()
-        #close cursor
-        cursor.close()
-        #check if result is empty
-        if result != []:
-            return True
-        
-        return False
+            return False
 
     #get code from name
     def get_code_from_name(self, name, db_connection):
@@ -59,16 +60,17 @@ class TownTable(Table):
             db_connection: psycopg2 db connection instance
         Get town's code using town's name
         """
-        #create cursor
-        cursor = db_connection.cursor()
-        #execute query
-        cursor.execute("SELECT code FROM commune WHERE name = '{}'".format(name.upper()))
-        #get result
-        result = cursor.fetchone()
-        #close cursor
-        cursor.close()
-        #check if result is empty
-        if result != []:
-            return result[0]
-        
-        return None
+        if db_connection != None:
+            #create cursor
+            cursor = db_connection.cursor()
+            #execute query
+            cursor.execute("SELECT code FROM commune WHERE name = '{}'".format(name.upper()))
+            #get result
+            result = cursor.fetchone()
+            #close cursor
+            cursor.close()
+            #check if result is empty
+            if result != []:
+                return result[0]
+            
+            return None
