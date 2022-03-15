@@ -37,6 +37,8 @@ def extract_data_from_file(path):
     Purpose
     This function extracts data from a file and returns a dataframe or a dict of dataframes.
     """
+    data = []
+    sheets = []
     filename, file_extension = os.path.splitext(path)
     if file_extension == ".xlsx" or file_extension == ".xls":
         data = read_xlsx_file(path)

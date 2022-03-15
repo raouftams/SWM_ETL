@@ -2,6 +2,7 @@ import requests
 from dateutil.parser import parse
 import petl as etl
 import time
+import pickle
 from table.TownTable import TownTable
 from hijri_converter import Hijri, Gregorian
 
@@ -189,6 +190,14 @@ vehicles_table_types = {
     "code_commune": str
 }
 
+#Utilities functions
+def openPkl(file_path):
+    with  open(file_path,"rb") as file:
+        return pickle.load(file)
+
+def savePkl(objname,filename,pathsave):
+    with  open(pathsave+filename,"wb") as file:
+        pickle.dump(objname,file,pickle.HIGHEST_PROTOCOL)
 
 #get hijri date from a date
 def gregorian_to_hijri_date(date: str):
@@ -290,9 +299,10 @@ def get_registred_towns_data(db_connection):
     data = instance.get_all(db_connection)
     town_names = []
     town_codes = []
-    for r in data:
-        town_names.append(r[1]) 
-        town_codes.append(r[0])
+    if data != None:
+        for r in data:
+            town_names.append(r[1]) 
+            town_codes.append(r[0])
     
     return town_codes, town_names
 
@@ -306,12 +316,13 @@ def get_registred_vehicles_data(db_connection):
     data = instance.get_all(db_connection)
     codes = []
     matricules = []
-    for r in data:
-        #append vehicle code or id
-        codes.append(r[0])
-        #append old matricule value
-        matricules.append(r[1])
-        #append new matricule value
-        matricules.append(r[2])
-        
+    if data != None:
+        for r in data:
+            #append vehicle code or id
+            codes.append(r[0])
+            #append old matricule value
+            matricules.append(r[1])
+            #append new matricule value
+            matricules.append(r[2])
+
     return codes, matricules
