@@ -5,11 +5,13 @@ import petl as etl
 import pandas as pd
 import sys
 import os
-
+from config.database import connect
 
 def main():
     sys.setrecursionlimit(10000)
-    
+
+    db_connection = connect()
+    print(db_connection)
     #path = "/home/tamssaout/Bureau/data/new_data/BDD Rotations 2018-2019.xlsx"
     #print("data extraction")
     #data, sheets = extract_data_from_file(path)
