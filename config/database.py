@@ -2,7 +2,7 @@ from configparser import ConfigParser
 import psycopg2
 
 #database configuration
-def config(filename='config/database.ini', section='postgresql'):
+def config(filename='/home/tamssaout/etl/config/database.ini', section='postgresql'):
     """
     credits to: https://www.postgresqltutorial.com/postgresql-python/connect/
     """
