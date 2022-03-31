@@ -5,6 +5,7 @@ import petl as etl
 import numpy as np
 import distance
 import math
+import random
 
 #used global variables
 db_connection = connect()
@@ -88,8 +89,8 @@ def structure_rotation_df(df):
         #drop useless columns
         df = df.drop(df.columns.difference(rotations_table_header), axis=1)
         #drop rows with nan value on vehicle column, they represent total values of previous rows
-        df.dropna(subset = ["ticket"], inplace=True)
-        df.dropna(subset = ["vehicle_mat", "vehicle_id"], how="all", inplace=True)
+        #df.dropna(subset = ["ticket"], inplace=True)
+        #df.dropna(subset = ["vehicle_mat", "vehicle_id"], how="all", inplace=True)
         df.dropna(subset = ["town_code", "town"], how="all", inplace=True)
         df.dropna(subset = ["date", "date_hijri"], how="all", inplace=True)
 
@@ -213,48 +214,52 @@ def transform_towns_names(table, town_abbreviations=None, stop_words=None):
 
     #iterate over the towns old names
     for old_name in old_names:
-        lower_old_name = str.lower(old_name)
-        #removing stop words from the old name
-        if stop_words != None:
-            for stop_word in stop_words:
-                if str.lower(stop_word) in lower_old_name:
-                    lower_old_name = lower_old_name.replace(str.lower(stop_word), "").strip()
+        if not str.upper(old_name).strip() in town_names:
+            lower_old_name = str.lower(old_name).strip()
+            #removing stop words from the old name
+            if stop_words != None:
+                for stop_word in stop_words:
+                    if str.lower(stop_word) in lower_old_name:
+                        lower_old_name = lower_old_name.replace(str.lower(stop_word), "").strip()
 
-        if lower_old_name != "" and lower_old_name != "nan":
-            #check if old name is an abbreviation
-            if town_abbreviations != None and lower_old_name in town_abbreviations.keys():
-                towns_names_dict[old_name] = town_abbreviations[lower_old_name]
-            
-            else:
-                for i in range(len(town_names)):
-                    #check if a substring of the old name is in the towns names
-                    if compare_strings_with_substrings(lower_old_name, str.lower(town_names[i])) > 1:
-                        #if there are more than one match, the town is not changed
-                        towns_names_dict[old_name] = town_names[i]
-                        
-                #initializing the nearest string in towns_names to the string at position -1
-                nearest = 0
-                min_distance = distance.levenshtein(lower_old_name, str.lower(town_names[0]))
-                for i in range(len(town_names)):
-                    #calculate the distance between the old name and the current town name
-                    current_distance = distance.levenshtein(lower_old_name, str.lower(town_names[i]))
-                    if current_distance < min_distance:
-                        min_distance = current_distance
-                        nearest = i
+            if lower_old_name != "" and lower_old_name != "nan":
+                #check if old name is an abbreviation
+                if town_abbreviations != None and lower_old_name in town_abbreviations.keys():
+                    towns_names_dict[old_name] = town_abbreviations[lower_old_name]
 
-                #check the which one is the nearest by number of matches in their substrings before assigning the town name
-                if old_name in towns_names_dict.keys():
-                    if compare_strings_with_substrings(str.lower(old_name), str.lower(town_names[nearest])) > compare_strings_with_substrings(old_name, towns_names_dict[old_name]):
-                        towns_names_dict[old_name] = town_names[nearest]
                 else:
-                    if compare_strings_with_substrings(str.lower(old_name), str.lower(town_names[nearest])) == 0:
-                        towns_names_dict[old_name] = 'nan'
-                    else:
-                        towns_names_dict[old_name] = town_names[nearest]
-                
-        else: # lower_old_name = ""
-            towns_names_dict[old_name] = 'nan'
+                    for i in range(len(town_names)):
+                        #check if a substring of the old name is in the towns names
+                        if compare_strings_with_substrings(lower_old_name, str.lower(town_names[i])) > 1:
+                            #if there are more than one match, the town is not changed
+                            towns_names_dict[old_name] = town_names[i]
 
+                    #initializing the nearest string in towns_names to the string at position 0
+                    nearest = 0
+                    min_distance = distance.levenshtein(lower_old_name, str.lower(town_names[0]))
+                    for i in range(len(town_names)):
+                        #calculate the distance between the old name and the current town name
+                        current_distance = distance.levenshtein(lower_old_name, str.lower(town_names[i]))
+                        if current_distance < min_distance:
+                            min_distance = current_distance
+                            nearest = i
+
+                    #check the which one is the nearest by number of matches in their substrings before assigning the town name
+                    if old_name in towns_names_dict.keys():
+                        if compare_strings_with_substrings(lower_old_name, str.lower(town_names[nearest])) >= compare_strings_with_substrings(old_name, towns_names_dict[old_name]):
+                            towns_names_dict[old_name] = town_names[nearest]
+                    else:
+                        if compare_strings_with_substrings(lower_old_name, str.lower(town_names[nearest])) == 0 and distance.levenshtein(lower_old_name, str.lower(town_names[nearest])) > len(lower_old_name)/2:
+                            towns_names_dict[old_name] = 'nan'
+                        else:
+                            towns_names_dict[old_name] = town_names[nearest]
+
+            else: # lower_old_name = ""
+                towns_names_dict[old_name] = 'nan'
+
+        else:#town name not in db
+            towns_names_dict[old_name] = str.upper(old_name)
+            
     #changing the town names in table
     for old_name in towns_names_dict.keys():
         if old_name != 'nan':
@@ -353,7 +358,7 @@ def check_vehicle_id(value, row):
     if value not in vehicles_codes:
         #check if matricule exists
         if row["vehicle_mat"] == "nan" or row["vehicle_mat"] not in vehicles_mats:
-            return "nan_id"
+            return "unknown" #this is a primary key in vehicle table (db) for unknown vehicles
         else: #matricule exists in db
             #get the correspondant id of the matricule
             #vehicles_mats array contains old and new matricules of the vehicle
@@ -378,6 +383,12 @@ def transform_rotation_vehicle_data(table):
 
     return table        
 
+
+#Transform ticket code nan values
+def transform_ticket(table):
+    table = etl.convert(table, 'ticket', lambda x: random.randint(1000000, 9999999), where=lambda row: row["ticket"] == 'nan')
+
+    return table
 
 #petl function to get gregorian date from hijri date
 def get_gregorian_date(value, row):
@@ -480,8 +491,9 @@ def net_extra_to_net_cet(val, row):
     purpose:
         This function replaces the net_cet value with net_extra if net_cet is nan
     """
-
-    if math.isnan(val):
+    if not math.isnan(row["net_extra"]):
+        return row["net_extra"]
+    if math.isnan(val) or val == 'nan':
         if math.isnan(row["net_extra"]):
             return 0
         return row["net_extra"]
@@ -531,6 +543,7 @@ def transform_weights(table):
 
     #remove rows with nan value on net_cet
     table = etl.selectisnot(table, "net_cet", 0)
+    table = etl.selectisnot(table, "net_cet", 'nan')
 
     #fill missing brute values
     table = etl.convert(table, "brute",get_brute_weight,pass_row = True)
@@ -555,10 +568,12 @@ def transform_rotation_data(data, sheets=None):
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
     table = transform_towns_data(table)
-    print(table)
     #transform vehicles codes
     print("vehicles transfromation")
     table = transform_rotation_vehicle_data(table)
+    #transform tickets codes
+    print("tickets transformation")
+    table = transform_ticket(table)
     #transfroming dates
     print("dates transformation")
     table = transform_dates(table)
@@ -568,7 +583,6 @@ def transform_rotation_data(data, sheets=None):
     #transforming weights
     print("weights transformation")
     table = transform_weights(table)
-
 
     return table
 
