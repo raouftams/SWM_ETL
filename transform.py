@@ -40,7 +40,6 @@ def remove_rotation_data_duplicates(table, header):
     This function removes duplicates from a petl table
     """
     table = etl.distinct(table, header)
-    table = etl.distinct(table, ["ticket", "date", "cet"])
 
     return table
 
@@ -259,7 +258,8 @@ def transform_towns_names(table, town_abbreviations=None, stop_words=None):
 
         else:#town name not in db
             towns_names_dict[old_name] = str.upper(old_name)
-            
+
+    print(towns_names_dict)
     #changing the town names in table
     for old_name in towns_names_dict.keys():
         if old_name != 'nan':
@@ -564,25 +564,32 @@ def transform_rotation_data(data, sheets=None):
     print("data structuring")
     table = structure_rotations_data(data, sheets)
     etl.convert(table, rotations_table_types)
+    print(etl.nrows(table))
     #Transforming towns names in the table
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
     print("towns names transformation")
     table = transform_towns_data(table)
+    print(etl.nrows(table))
     #transform vehicles codes
     print("vehicles transfromation")
     table = transform_rotation_vehicle_data(table)
+    print(etl.nrows(table))
     #transform tickets codes
     print("tickets transformation")
     table = transform_ticket(table)
+    print(etl.nrows(table))
     #transfroming dates
     print("dates transformation")
     table = transform_dates(table)
+    print(etl.nrows(table))
     #transfroming time
     print("time transformation")
     table = transform_time(table)
+    print(etl.nrows(table))
     #transforming weights
     print("weights transformation")
     table = transform_weights(table)
+    print(etl.nrows(table))
 
     return table
 
