@@ -87,9 +87,7 @@ def structure_rotation_df(df):
         df = add_missing_columns(df, rotations_table_header)
         #drop useless columns
         df = df.drop(df.columns.difference(rotations_table_header), axis=1)
-        #drop rows with nan value on vehicle column, they represent total values of previous rows
-        #df.dropna(subset = ["ticket"], inplace=True)
-        #df.dropna(subset = ["vehicle_mat", "vehicle_id"], how="all", inplace=True)
+        #drop rows with nan values
         df.dropna(subset = ["town_code", "town"], how="all", inplace=True)
         df.dropna(subset = ["date", "date_hijri"], how="all", inplace=True)
 
@@ -259,7 +257,6 @@ def transform_towns_names(table, town_abbreviations=None, stop_words=None):
         else:#town name not in db
             towns_names_dict[old_name] = str.upper(old_name)
 
-    print(towns_names_dict)
     #changing the town names in table
     for old_name in towns_names_dict.keys():
         if old_name != 'nan':
@@ -354,7 +351,6 @@ def check_vehicle_id(value, row):
     """
 
     #check if vehicle id doesn't exist in db
-    
     if value not in vehicles_codes:
         #check if matricule exists
         if row["vehicle_mat"] == "nan" or row["vehicle_mat"] not in vehicles_mats:
@@ -557,39 +553,32 @@ def transform_weights(table):
 def transform_rotation_data(data, sheets=None):
     """
     params: 
-            data: a dict of pandas dataframes
-            sheets: list of keys
+        data: a dict of pandas dataframes
+        sheets: list of keys
     """
     #transform to a standard structure
-    print("data structuring")
     table = structure_rotations_data(data, sheets)
     etl.convert(table, rotations_table_types)
-    print(etl.nrows(table))
+
     #Transforming towns names in the table
     #towns_list, towns_abbreviations and town_stop_words ar in the utilities file
-    print("towns names transformation")
     table = transform_towns_data(table)
-    print(etl.nrows(table))
+    
     #transform vehicles codes
-    print("vehicles transfromation")
     table = transform_rotation_vehicle_data(table)
-    print(etl.nrows(table))
+
     #transform tickets codes
-    print("tickets transformation")
     table = transform_ticket(table)
-    print(etl.nrows(table))
+
     #transfroming dates
-    print("dates transformation")
     table = transform_dates(table)
-    print(etl.nrows(table))
+
     #transfroming time
-    print("time transformation")
     table = transform_time(table)
-    print(etl.nrows(table))
+
     #transforming weights
-    print("weights transformation")
     table = transform_weights(table)
-    print(etl.nrows(table))
+
 
     return table
 
