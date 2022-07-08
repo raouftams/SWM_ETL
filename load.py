@@ -1,9 +1,7 @@
 from config.database import connect
-from table.RotationTable import RotationTable
 from table.TicketTable import TicketTable
 from table.VehicleTable import VehicleTable
 from table.TownTable import TownTable
-from table.UnityTable import UnityTable
 import petl as etl
 import numpy as np
 import math
@@ -119,12 +117,6 @@ def check_ticket(table, db_connection):
         check if ticket exists in database else add to db
     """
 
-    #ticket table
-    ticket_table = []
-
-    #create ticket table instance
-    ticket = TicketTable()
-
     #extract tickets data from table 
     tickets_array = etl.cut(table, "ticket", "brute", "net_cet", "date", "time", "cet")
     
@@ -238,11 +230,10 @@ def load_rotations(rotation_table):
     #select data with distinct ticket_code, date and cet
     rotation_table = etl.distinct(rotation_table, ["ticket", "date", "cet"])
 
-    print("Checking ticket data...")
+    #Checking ticket data
     rotation_table = check_ticket(rotation_table, db_connection)
 
     #load rotations data to the database
-    print("Loading rotations data to the database...")
     insert_rotations(rotation_table, db_connection)
 
 
